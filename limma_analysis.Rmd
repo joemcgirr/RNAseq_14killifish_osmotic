@@ -47,23 +47,27 @@ packages(RColorBrewer)
 packages(dplyr)
 packages(tidyr)
 packages(ggrepel)
-bioconductors(DESeq2)
-bioconductors(limma)
-bioconductors('edgeR')
+#BiocManager::install('DESeq2')
+packages(DESeq2)
+#BiocManager::install('limma')
+#BiocManager::install('edgeR')
+packages(limma)
+packages(edgeR)
 packages(gplots)
 packages(lattice)
-packages("vsn")
+#BiocManager::install('vsn')
+packages(vsn)
 sessionInfo()
 ```
 
 
 ```{r loadfiles, results='hide', include=FALSE}
 # This is the counts with Experimental Design Info in the last 5 rows
-setwd("~/Documents/UCDavis/Whitehead/RNAseq_15killifish/DE_scripts/limma")
+setwd("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/RNAseq_17killifish/DE_scripts/limma")
 #if(!file.exists('../../../../Ensembl_species_counts_designfactors.csv')){
 #  download.file("https://osf.io/7vp38/download",'Ensembl_species_counts_designfactors.csv')
 #}
-counts_design <- read.csv("~/Documents/UCDavis/Whitehead/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
+counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
 ```
 
 Number of raw counts, samples
