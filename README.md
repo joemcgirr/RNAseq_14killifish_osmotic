@@ -4,5 +4,5 @@ Measuring conserved and divergent expression responses to osmotic stress in mult
 WORK IN PROGRESS
 
 ## Collaborators
-<b>Lisa Johnson</b>, <b>Joe McGirr</b>, Noah Reid, Reid Brennan, Jen Roach, Titus Brown, Andrew Whitehead
+<b>Lisa Johnson</b>, <b>Joe McGirr</b>, Noah Reid, Reid Brennan, Jen Roach, Blythe Durbin-Johnson, David Rocke, Titus Brown, Andrew Whitehead
 
