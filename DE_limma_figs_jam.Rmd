@@ -55,13 +55,13 @@ packages(dplyr)
 packages(tidyr)
 packages(knitr)
 packages(ggrepel)
-bioconductors(DESeq2)
-bioconductors(limma)
-bioconductors('edgeR')
+packages(DESeq2)
+packages(limma)
+packages('edgeR')
 packages(gplots)
 packages(lattice)
 packages("vsn")
-bioconductors(biomaRt)
+packages('biomaRt')
 packages(kableExtra)
 packages(pheatmap)
 packages("SummarizedExperiment")
@@ -74,7 +74,7 @@ The raw counts file, generated with `NumReads` from the salmon (version 0.12.0) 
 ```{r loadfiles, results='hide', include=FALSE, warning=FALSE}
 # This is the counts with Experimental Design Info in the last 5 rows
 
-setwd("~/Documents/UCDavis/Whitehead/RNAseq_15killifish/DE_scripts/limma")
+#setwd("~/Documents/UCDavis/Whitehead/RNAseq_15killifish/DE_scripts/limma")
 if(!file.exists('~/Documents/UCDavis/Whitehead/kfish_expression_July2019/Ensembl_species_counts_designfactors.csv')){
   download.file("https://osf.io/7vp38/download",'Ensembl_species_counts_designfactors.csv')
 }
@@ -141,7 +141,7 @@ The random effect of `species` will be taken into account later.
 ```{r designinfo,results='show', warning=FALSE}
 
 # --------------------
-# design cateogories
+# design categories
 # --------------------
 
 species<-as.character(unlist(design[1,]))
@@ -168,7 +168,7 @@ colnames(design)
 
 # Filtering and Normalization
 
-Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minium total count of 100. This reduced the counts table to the following dimensions (genes x samples):
+Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
 
 ```{r filt, results="show",warning=FALSE}
 
