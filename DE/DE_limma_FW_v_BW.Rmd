@@ -1,0 +1,173 @@
+---
+title: "DE_limma_FW_v_BW"
+author: "Lisa Johnson / Joe McGirr"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    collapsed: no
+    df_print: paged
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_notebook:
+    toc: yes
+    toc_depth: 5
+editor_options: 
+  chunk_output_type: console
+---
+
+# Introduction
+
+A mixed model with random effects was chosen for this multifactor experiment, and analyzed using the `limma` package in R. This package implements a linear modeling approach and empirical Bayes statistics. The `limma` package with the `voom` method estimates the mean-variance relationship of the log-counts, generates a precision weight for each observation and enters these into the limma empirical Bayes analysis pipeline.
+
+In this model, `clade` (levels = Clade1, Clade2, Clade3), `physiology` (levels = Marine, Freshwater), and experimental `condition` (levels = 15ppt, 0.2ppt) are fixed effects while `species` (levels = 14) is considered a random effect.
+
+https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html
+
+```{r LoadPackages, results='hide', include=FALSE, warning=FALSE}
+
+# Install function for packages    
+packages<-function(x){
+  x<-as.character(match.call()[[2]])
+  if (!require(x,character.only=TRUE)){
+    install.packages(pkgs=x,repos="http://cran.r-project.org")
+    require(x,character.only=TRUE)
+  }
+}
+
+
+packages(MASS)
+packages(ggplot2)
+packages(gtools)
+packages(pheatmap)
+packages(cowplot)
+packages(RColorBrewer)
+packages(dplyr)
+packages(tidyr)
+packages(knitr)
+packages(ggrepel)
+packages(DESeq2)
+packages(limma)
+packages(edgeR)
+packages(gplots)
+packages(lattice)
+packages(vsn)
+packages(biomaRt)
+packages(kableExtra)
+packages(pheatmap)
+packages(SummarizedExperiment)
+packages(emmeans)
+packages(data.table)
+```
+
+The raw counts file, generated with `NumReads` from the salmon (version 0.12.0) quantification tool and summarized with the tximport Bioconductor package (version 1.10.1) in R, can be downloaded from an [osf repository](https://osf.io/m4xeg/) with this [link](https://osf.io/7vp38/download), then imported into the R framework.
+
+```{r loadfiles, results='hide', include=FALSE, warning=FALSE}
+# This is the counts with Experimental Design Info in the last 5 rows
+
+counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
+
+```
+
+Samples from species with low numbers of replicates were dropped from the raw counts table (*F. zebrinus*, *F. nottii*, *F. sciadicus*). The raw counts table has the following dimensions (genes x samples). 
+
+```{r dropsamples,results='show', warning=FALSE}
+
+#dim(counts_design)
+#[1] 31595   130
+
+# -----------------------
+# Format design and counts matrix
+# Drop columns with no data
+# -----------------------
+
+design <- counts_design[counts_design$Ensembl == 'Empty',]
+#design$type <- c("species","native_salinity","clade","group","condition")
+drops <- c("X","Ensembl",
+           "F_zebrinus_BW_1.quant","F_zebrinus_BW_2.quant",
+           "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
+           "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
+           "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant","F_sciadicus_FW_2.quant")
+ transfer_drops <- c("F_sciadicus_transfer_1.quant","F_rathbuni_transfer_1.quant","F_rathbuni_transfer_2.quant","F_rathbuni_transfer_3.quant",
+                     "F_grandis_transfer_1.quant","F_grandis_transfer_2.quant","F_grandis_transfer_3.quant",
+                     "F_notatus_transfer_1.quant","F_notatus_transfer_2.quant","F_notatus_transfer_3.quant",
+                     "F_parvapinis_transfer_1.quant","F_parvapinis_transfer_2.quant",
+                     "L_goodei_transfer_1.quant","L_goodei_transfer_2.quant","L_goodei_transfer_3.quant",
+                     "F_olivaceous_transfer_1.quant","F_olivaceous_transfer_2.quant",
+                     "L_parva_transfer_1.quant","L_parva_transfer_2.quant","L_parva_transfer_3.quant",
+                     "F_heteroclitusMDPP_transfer_1.quant","F_heteroclitusMDPP_transfer_2.quant","F_heteroclitusMDPP_transfer_3.quant",
+                     "F_similis_transfer_1.quant","F_similis_transfer_2.quant","F_similis_transfer_3.quant",
+                     "F_diaphanus_transfer_1.quant","F_diaphanus_transfer_2.quant",
+                     "F_chrysotus_transfer_1.quant","F_chrysotus_transfer_2.quant",
+                     "A_xenica_transfer_1.quant","A_xenica_transfer_2.quant","A_xenica_transfer_3.quant" ,
+                     "F_catanatus_transfer_1.quant","F_catanatus_transfer_2.quant",
+                     "F_heteroclitusMDPL_transfer_1.quant","F_heteroclitusMDPL_transfer_2.quant","F_heteroclitusMDPL_transfer_3.quant")
+counts<-counts_design[!counts_design$Ensembl == 'Empty',]
+rownames(counts)<-counts$Ensembl
+design <- design[ , !(names(design) %in% drops)]
+counts <- counts[ , !(names(counts) %in% drops)]
+design <- design[ , !(names(design) %in% transfer_drops)]
+counts <- counts[ , !(names(counts) %in% transfer_drops)]
+#dim(design)
+#[1]  5 81
+dim(counts)
+gene.names<-rownames(counts)
+design[] <- lapply( design, factor)
+```
+
+# Sample Design Matrix
+
+A matrix was generated using the following model with fixed effects: 
+
+```
+~physiology*condition*clade
+```
+The random effect of `species` will be taken into account later.
+
+```{r designinfo,results='show', warning=FALSE}
+
+# --------------------
+# design categories
+# --------------------
+
+species<-as.character(unlist(design[1,]))
+physiology<-as.character(unlist(design[2,]))
+clade<-as.character(unlist(design[3,]))
+condition<-as.character(unlist(design[5,]))
+condition_physiology<-as.vector(paste(condition,physiology,sep="."))
+condition_physiology_clade <- as.vector(paste(condition_physiology,clade,sep="."))
+condition_physiology_clade <- as.vector(paste("group",condition_physiology_clade,sep=""))
+cols<-colnames(counts)
+ExpDesign <- data.frame(row.names=cols,
+                        condition=condition,
+                        physiology = physiology,
+                        clade = clade,
+                        species = species,
+                        sample=cols)
+ExpDesign
+design = model.matrix( ~physiology*condition*clade, ExpDesign)
+colnames(design)
+# check rank of matrix
+#Matrix::rankMatrix( design )
+#dim(design)
+```
+
+# Filtering and Normalization
+
+Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
+
+```{r filt, results="show",warning=FALSE}
+
+gene.names<-rownames(counts)
+counts<-as.matrix(as.data.frame(sapply(counts, as.numeric)))
+rownames(counts)<-gene.names
+#class(counts)
+
+keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = 10, min.total.count = 100)
+counts.filt <- counts[keep,]
+dim(counts.filt)
+#write.csv(counts.filt,"../../../21k_counts_filt_30April2019.csv")
+```

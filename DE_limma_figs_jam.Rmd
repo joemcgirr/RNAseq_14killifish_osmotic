@@ -25,6 +25,8 @@ A mixed model with random effects was chosen for this multifactor experiment, an
 
 In this model, `clade` (levels = Clade1, Clade2, Clade3), `physiology` (levels = Marine, Freshwater), and experimental `condition` (levels = 15ppt, 0.2ppt) are fixed effects while `species` (levels = 14) is considered a random effect.
 
+https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html
+
 ```{r LoadPackages, results='hide', include=FALSE, warning=FALSE}
 
 # Install function for packages    
@@ -36,14 +38,6 @@ packages<-function(x){
   }
 }
 
-bioconductors <- function(x){
-    x<- as.character(match.call()[[2]])
-    if (!require(x, character.only = TRUE)){
-      source("https://bioconductor.org/biocLite.R")
-      biocLite(pkgs=x)
-      require(x, character.only = TRUE)
-    }
-}
 
 packages(MASS)
 packages(ggplot2)
@@ -57,15 +51,15 @@ packages(knitr)
 packages(ggrepel)
 packages(DESeq2)
 packages(limma)
-packages('edgeR')
+packages(edgeR)
 packages(gplots)
 packages(lattice)
-packages("vsn")
-packages('biomaRt')
+packages(vsn)
+packages(biomaRt)
 packages(kableExtra)
 packages(pheatmap)
-packages("SummarizedExperiment")
-packages("emmeans")
+packages(SummarizedExperiment)
+packages(emmeans)
 packages(data.table)
 ```
 
@@ -74,10 +68,10 @@ The raw counts file, generated with `NumReads` from the salmon (version 0.12.0) 
 ```{r loadfiles, results='hide', include=FALSE, warning=FALSE}
 # This is the counts with Experimental Design Info in the last 5 rows
 
-#setwd("~/Documents/UCDavis/Whitehead/RNAseq_15killifish/DE_scripts/limma")
-if(!file.exists('~/Documents/UCDavis/Whitehead/kfish_expression_July2019/Ensembl_species_counts_designfactors.csv')){
-  download.file("https://osf.io/7vp38/download",'Ensembl_species_counts_designfactors.csv')
-}
+# setwd("~/Documents/UCDavis/Whitehead/RNAseq_15killifish/DE_scripts/limma")
+# if(!file.exists('~/Documents/UCDavis/Whitehead/kfish_expression_July2019/Ensembl_species_counts_designfactors.csv')){
+#   download.file("https://osf.io/7vp38/download",'Ensembl_species_counts_designfactors.csv')
+# }
 
 counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
 
@@ -102,26 +96,26 @@ drops <- c("X","Ensembl",
            "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
            "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
            "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant","F_sciadicus_FW_2.quant")
-transfer_drops <- c("F_sciadicus_transfer_1.quant","F_rathbuni_transfer_1.quant","F_rathbuni_transfer_2.quant","F_rathbuni_transfer_3.quant",
-                    "F_grandis_transfer_1.quant","F_grandis_transfer_2.quant","F_grandis_transfer_3.quant",
-                    "F_notatus_transfer_1.quant","F_notatus_transfer_2.quant","F_notatus_transfer_3.quant",
-                    "F_parvapinis_transfer_1.quant","F_parvapinis_transfer_2.quant",
-                    "L_goodei_transfer_1.quant","L_goodei_transfer_2.quant","L_goodei_transfer_3.quant",
-                    "F_olivaceous_transfer_1.quant","F_olivaceous_transfer_2.quant",
-                    "L_parva_transfer_1.quant","L_parva_transfer_2.quant","L_parva_transfer_3.quant",
-                    "F_heteroclitusMDPP_transfer_1.quant","F_heteroclitusMDPP_transfer_2.quant","F_heteroclitusMDPP_transfer_3.quant",
-                    "F_similis_transfer_1.quant","F_similis_transfer_2.quant","F_similis_transfer_3.quant",
-                    "F_diaphanus_transfer_1.quant","F_diaphanus_transfer_2.quant",
-                    "F_chrysotus_transfer_1.quant","F_chrysotus_transfer_2.quant",
-                    "A_xenica_transfer_1.quant","A_xenica_transfer_2.quant","A_xenica_transfer_3.quant" ,
-                    "F_catanatus_transfer_1.quant","F_catanatus_transfer_2.quant",
-                    "F_heteroclitusMDPL_transfer_1.quant","F_heteroclitusMDPL_transfer_2.quant","F_heteroclitusMDPL_transfer_3.quant")
+# transfer_drops <- c("F_sciadicus_transfer_1.quant","F_rathbuni_transfer_1.quant","F_rathbuni_transfer_2.quant","F_rathbuni_transfer_3.quant",
+#                     "F_grandis_transfer_1.quant","F_grandis_transfer_2.quant","F_grandis_transfer_3.quant",
+#                     "F_notatus_transfer_1.quant","F_notatus_transfer_2.quant","F_notatus_transfer_3.quant",
+#                     "F_parvapinis_transfer_1.quant","F_parvapinis_transfer_2.quant",
+#                     "L_goodei_transfer_1.quant","L_goodei_transfer_2.quant","L_goodei_transfer_3.quant",
+#                     "F_olivaceous_transfer_1.quant","F_olivaceous_transfer_2.quant",
+#                     "L_parva_transfer_1.quant","L_parva_transfer_2.quant","L_parva_transfer_3.quant",
+#                     "F_heteroclitusMDPP_transfer_1.quant","F_heteroclitusMDPP_transfer_2.quant","F_heteroclitusMDPP_transfer_3.quant",
+#                     "F_similis_transfer_1.quant","F_similis_transfer_2.quant","F_similis_transfer_3.quant",
+#                     "F_diaphanus_transfer_1.quant","F_diaphanus_transfer_2.quant",
+#                     "F_chrysotus_transfer_1.quant","F_chrysotus_transfer_2.quant",
+#                     "A_xenica_transfer_1.quant","A_xenica_transfer_2.quant","A_xenica_transfer_3.quant" ,
+#                     "F_catanatus_transfer_1.quant","F_catanatus_transfer_2.quant",
+#                     "F_heteroclitusMDPL_transfer_1.quant","F_heteroclitusMDPL_transfer_2.quant","F_heteroclitusMDPL_transfer_3.quant")
 counts<-counts_design[!counts_design$Ensembl == 'Empty',]
 rownames(counts)<-counts$Ensembl
 design <- design[ , !(names(design) %in% drops)]
 counts <- counts[ , !(names(counts) %in% drops)]
-design <- design[ , !(names(design) %in% transfer_drops)]
-counts <- counts[ , !(names(counts) %in% transfer_drops)]
+#design <- design[ , !(names(design) %in% transfer_drops)]
+#counts <- counts[ , !(names(counts) %in% transfer_drops)]
 #dim(design)
 #[1]  5 81
 dim(counts)
@@ -348,10 +342,25 @@ tmp <- dplyr::select(tmp, Ensembl, everything())
 vobj = voom( genes, design, plot=TRUE)
 lcpm <- cpm(genes$counts, log = TRUE)
 
+
+
+
+# colnames(design) <- make.names(colnames(design)) 
+# contr.matrix <- makeContrasts(
+#    transfer_vs_BW = conditiontransfer-condition15_ppt, 
+#    levels = colnames(design))
+# contr.matrix
+# 
+# vfit <- lmFit(vobj, design)
+# vfit <- contrasts.fit(vfit, contrasts=contr.matrix)
+# efit <- eBayes(vfit)
+# plotSA(efit, main="Final model: Mean-variance trend")
+
 # log counts after DE
 
 boxplot(lcpm, las = 2, main = "")
 plot(colSums(t(lcpm)))
+
 ```
 
 Voom weights:
