@@ -514,7 +514,7 @@ meta <- meta[,-5]
 
 
 comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
-comp <- "main_physiology"
+comp <- "main_transfer"
 
 
 plot_all_species <- function(comp){
