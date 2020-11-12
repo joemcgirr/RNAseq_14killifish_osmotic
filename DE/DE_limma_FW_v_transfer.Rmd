@@ -26,6 +26,7 @@ A mixed model with random effects was chosen for this multifactor experiment, an
 In this model, `clade` (levels = Clade1, Clade2, Clade3), `physiology` (levels = Marine, Freshwater), and experimental `condition` (levels = 15ppt, 0.2ppt) are fixed effects while `species` (levels = 14) is considered a random effect.
 
 https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html
+https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/Background_testingForDGE.pdf
 
 ```{r LoadPackages, results='hide', include=FALSE, warning=FALSE}
 
@@ -62,6 +63,19 @@ packages(SummarizedExperiment)
 packages(emmeans)
 packages(data.table)
 packages(ggpubr)
+
+# color-blind friendly 
+# Wong, B. Points of view: Color blindness. Nat Methods (2011).
+bla <- "#000000"
+blu <- "#0072b2"
+grb <- "#56b4e9"
+lir <- "#cc79a7"
+gre <- "#009e73"
+red <- "#d55e00"
+org <- "#e69f00"
+yel <- "#f0e442"
+gry<-  '#BBBBBB'
+
 ```
 
 The raw counts file, generated with `NumReads` from the salmon (version 0.12.0) quantification tool and summarized with the tximport Bioconductor package (version 1.10.1) in R, can be downloaded from an [osf repository](https://osf.io/m4xeg/) with this [link](https://osf.io/7vp38/download), then imported into the R framework.
@@ -305,6 +319,36 @@ plot(pca$x[,1:2],
 legend(-75,50,legend=c("Clade 1","Clade 2","Clade 3"),col=rainbow(length(unique(clade))),cex=0.75, pch=19)
 legend(-75,25,legend=c("Freshwater","Marine"),cex=0.75,pch=c(16, 2, 9))
 
+
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+
+head(meta)   
+
+pca1 <- pca$x[,1:2]
+pca1 <- merge(pca1, meta, by = "row.names")
+
+png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pca_all_counts.png", height = 5, width = 6.5, units = 'in', res = 600)
+
+ggplot(data = pca1)+
+  geom_point(data = pca1, aes(x = PC1, y = PC2, color = physiology, shape = clade), size = 4.5)+
+  scale_color_manual(values=c(blu,red))+
+  scale_shape_manual(values=c(1,0,2))+
+  xlab("10.37%\n")+
+  ylab("8.63%\n")+
+  theme_bw()#+
+  #ggtitle("all populations and sampling years")
+
+dev.off()
+
+
 ```
 
 # DE Results
@@ -511,11 +555,55 @@ head(norm_counts)
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
 meta <- meta[,-5]
-
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+#meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+#meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+#meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
 
 comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
 comp <- "main_transfer"
 
+
+plot_all_species_phys <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","L_goodei","F_notatus","F_olivaceous","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","F_parvapinis","L_parva","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
+
+counts <- counts[c("gene","physiology","condition", "clade")]
+p2 <- counts %>% 
+  gather(variable, value, -gene) %>%
+  ggplot(aes(factor(value), gene)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_x", nrow = 1, strip.position = "bottom") +
+  theme_minimal()+
+  ylab("log2 normalized counts\n")+
+  theme(panel.spacing = unit(0, "lines"),
+        #panel.border = element_rect(fill = NA),
+        panel.background = element_rect(fill = NA),
+        axis.title.x = element_blank(),
+        legend.position = "none",
+        strip.placement = "outside")
+
+p <- ggarrange(p1, p2, 
+          labels = c("A", "B"),
+          ncol = 1, nrow = 2)
+print(p)  
+
+  
+}
 
 plot_all_species <- function(comp){
 
@@ -556,11 +644,10 @@ print(p)
   
 }
 
+
 for (comp in comps){
-plot_all_species(comp)
+plot_all_species_phys(comp)
 }
-
-
 
 comp <- "transfer_physiology_interaction"
 
@@ -572,6 +659,7 @@ counts[counts == -Inf]<-0
 p1<-ggplot(counts, aes(x=condition, y=gene, fill = physiology)) +
     geom_boxplot(outlier.shape = NA)+
     theme_minimal()+
+    scale_fill_manual(values=c(blu,red))+
     ylab("log2 normalized counts\n")+
     ggtitle(paste(comp," top DE\n", sig_genes$X[1], sep = ""))
 print(p1)
@@ -587,6 +675,7 @@ counts[counts == -Inf]<-0
 p1<-ggplot(counts, aes(x=clade, y=gene, fill = physiology)) +
     geom_boxplot(outlier.shape = NA)+
     theme_minimal()+
+    scale_fill_manual(values=c(blu,red))+
     ylab("log2 normalized counts\n")+
     ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
 print(p1)
@@ -601,9 +690,41 @@ counts[counts == -Inf]<-0
 p1<-ggplot(counts, aes(x=condition, y=gene, fill = clade)) +
     geom_boxplot(outlier.shape = NA)+
     theme_minimal()+
+    scale_fill_manual(values=c(blu,red,yel))+
     ylab("log2 normalized counts\n")+
     ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
 print(p1)
+
+
+#all species plot like lisa's
+
+plot_all_species_panels <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))
+
+print(p1)
+  
+}
+
+
+
 
 ```
 
