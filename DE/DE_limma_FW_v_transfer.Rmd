@@ -335,7 +335,7 @@ head(meta)
 pca1 <- pca$x[,1:2]
 pca1 <- merge(pca1, meta, by = "row.names")
 
-png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pca_all_counts.png", height = 5, width = 6.5, units = 'in', res = 600)
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pca_all_counts.png", height = 5, width = 6.5, units = 'in', res = 600)
 
 ggplot(data = pca1)+
   geom_point(data = pca1, aes(x = PC1, y = PC2, color = physiology, shape = clade), size = 4.5)+
@@ -346,7 +346,7 @@ ggplot(data = pca1)+
   theme_bw()#+
   #ggtitle("all populations and sampling years")
 
-dev.off()
+#dev.off()
 
 
 ```
@@ -383,6 +383,7 @@ dim(ann_salinity)
 ann_salinity <- ann_salinity[order(ann_salinity$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_salinity) <- ann_salinity$Row.names
 ann_salinity <- ann_salinity[,-1]
+ann_salinity$description <- NULL
 #write.csv(ann_salinity, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/main_transfer.csv"), quote = F, row.names = T)
 
 # ---------------------
@@ -404,6 +405,7 @@ dim(ann_physiology)
 ann_physiology <- ann_physiology[order(ann_physiology$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_physiology) <- ann_physiology$Row.names
 ann_physiology <- ann_physiology[,-1]
+ann_physiology$description <- NULL
 #write.csv(ann_physiology, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/main_physiology.csv"), quote = F, row.names = T)
 
 
@@ -426,6 +428,7 @@ dim(ann_clade)
 ann_clade <- ann_clade[order(ann_clade$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_clade) <- ann_clade$Row.names
 ann_clade <- ann_clade[,-1]
+ann_clade$description <- NULL
 #write.csv(ann_clade, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/main_clade.csv"), quote = F, row.names = T)
 
 
@@ -448,6 +451,7 @@ dim(ann_threeway)
 ann_threeway <- ann_threeway[order(ann_threeway$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_threeway) <- ann_threeway$Row.names
 ann_threeway <- ann_threeway[,-1]
+ann_threeway$description <- NULL
 #write.csv(ann_threeway, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/threeway.csv"), quote = F, row.names = T)
 
 # ---------------------
@@ -469,6 +473,7 @@ dim(ann_salinity_clade_interaction)
 ann_salinity_clade_interaction <- ann_salinity_clade_interaction[order(ann_salinity_clade_interaction$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_salinity_clade_interaction) <- ann_salinity_clade_interaction$Row.names
 ann_salinity_clade_interaction <- ann_salinity_clade_interaction[,-1]
+ann_salinity_clade_interaction$description <- NULL
 #write.csv(ann_salinity_clade_interaction, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/transfer_clade_interaction.csv"), quote = F, row.names = T)
 
 # ---------------------
@@ -490,6 +495,7 @@ dim(ann_salinity_physiology_interaction)
 ann_salinity_physiology_interaction <- ann_salinity_physiology_interaction[order(ann_salinity_physiology_interaction$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_salinity_physiology_interaction) <- ann_salinity_physiology_interaction$Row.names
 ann_salinity_physiology_interaction <- ann_salinity_physiology_interaction[,-1]
+ann_salinity_physiology_interaction$description <- NULL
 #write.csv(ann_salinity_physiology_interaction, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv"), quote = F, row.names = T)
 
 # ---------------------
@@ -511,6 +517,7 @@ dim(ann_clade_physiology_interaction)
 ann_clade_physiology_interaction <- ann_clade_physiology_interaction[order(ann_clade_physiology_interaction$adj.P.Val,decreasing = FALSE), ]
 rownames(ann_clade_physiology_interaction) <- ann_clade_physiology_interaction$Row.names
 ann_clade_physiology_interaction <- ann_clade_physiology_interaction[,-1]
+ann_clade_physiology_interaction$description <- NULL
 #write.csv(ann_clade_physiology_interaction, file = file.path("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/clade_physiology_interaction.csv"), quote = F, row.names = T)
 
 
@@ -546,187 +553,6 @@ dim(sig_main_salinity)
 
 ```
 
-## confirm DE patterns visually with normalized counts
-
-```{r filt, results="show",warning=FALSE}
-
-norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
-head(norm_counts)
-meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign.txt",stringsAsFactors = FALSE, header = TRUE)
-rownames(meta) <- meta$sample
-meta <- meta[,-5]
-meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
-meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
-#meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
-#meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
-#meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
-
-comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
-comp <- "main_transfer"
-
-
-plot_all_species_phys <- function(comp){
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","L_goodei","F_notatus","F_olivaceous","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","F_parvapinis","L_parva","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
-p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
-    geom_boxplot(outlier.shape = NA)+
-    theme_minimal()+
-    ylab("log2 normalized counts\n")+
-    scale_fill_manual(values=c(blu,red))+
-    scale_color_manual(values = c(rep("black",28)))+
-    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
-
-counts <- counts[c("gene","physiology","condition", "clade")]
-p2 <- counts %>% 
-  gather(variable, value, -gene) %>%
-  ggplot(aes(factor(value), gene)) +
-  geom_boxplot() +
-  facet_wrap(~variable, scales = "free_x", nrow = 1, strip.position = "bottom") +
-  theme_minimal()+
-  ylab("log2 normalized counts\n")+
-  theme(panel.spacing = unit(0, "lines"),
-        #panel.border = element_rect(fill = NA),
-        panel.background = element_rect(fill = NA),
-        axis.title.x = element_blank(),
-        legend.position = "none",
-        strip.placement = "outside")
-
-p <- ggarrange(p1, p2, 
-          labels = c("A", "B"),
-          ncol = 1, nrow = 2)
-print(p)  
-
-  
-}
-
-plot_all_species <- function(comp){
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-p1<-ggplot(counts, aes(x=condition, y=gene, col = physiology, fill = species)) +
-    geom_boxplot(outlier.shape = NA)+
-    theme_minimal()+
-    ylab("log2 normalized counts\n")+
-    scale_color_manual(values=c("black","grey"))+
-    #scale_fill_manual(values = c(red,pur,blu))+
-    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
-
-counts <- counts[c("gene","physiology","condition", "clade")]
-p2 <- counts %>% 
-  gather(variable, value, -gene) %>%
-  ggplot(aes(factor(value), gene)) +
-  geom_boxplot() +
-  facet_wrap(~variable, scales = "free_x", nrow = 1, strip.position = "bottom") +
-  theme_minimal()+
-  ylab("log2 normalized counts\n")+
-  theme(panel.spacing = unit(0, "lines"),
-        #panel.border = element_rect(fill = NA),
-        panel.background = element_rect(fill = NA),
-        axis.title.x = element_blank(),
-        legend.position = "none",
-        strip.placement = "outside")
-
-p <- ggarrange(p1, p2, 
-          labels = c("A", "B"),
-          ncol = 1, nrow = 2)
-print(p)  
-
-  
-}
-
-
-for (comp in comps){
-plot_all_species_phys(comp)
-}
-
-comp <- "transfer_physiology_interaction"
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-p1<-ggplot(counts, aes(x=condition, y=gene, fill = physiology)) +
-    geom_boxplot(outlier.shape = NA)+
-    theme_minimal()+
-    scale_fill_manual(values=c(blu,red))+
-    ylab("log2 normalized counts\n")+
-    ggtitle(paste(comp," top DE\n", sig_genes$X[1], sep = ""))
-print(p1)
-
-
-comp <- "clade_physiology_interaction"
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-p1<-ggplot(counts, aes(x=clade, y=gene, fill = physiology)) +
-    geom_boxplot(outlier.shape = NA)+
-    theme_minimal()+
-    scale_fill_manual(values=c(blu,red))+
-    ylab("log2 normalized counts\n")+
-    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
-print(p1)
-
-comp <- "transfer_clade_interaction"
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-p1<-ggplot(counts, aes(x=condition, y=gene, fill = clade)) +
-    geom_boxplot(outlier.shape = NA)+
-    theme_minimal()+
-    scale_fill_manual(values=c(blu,red,yel))+
-    ylab("log2 normalized counts\n")+
-    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
-print(p1)
-
-
-#all species plot like lisa's
-
-plot_all_species_panels <- function(comp){
-
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/DE/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
-
-counts <- merge(sig_genes_counts, meta, by = "row.names")
-counts$gene <- log2(counts[,2])
-counts[counts == -Inf]<-0
-counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
-p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
-  geom_point()+
-    theme_minimal()+
-    ylab("log2 normalized counts\n")+
-    scale_fill_manual(values=c(blu,red))+
-    scale_color_manual(values = c(rep("black",28)))+
-    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))+
-    facet_wrap(~clade + species, ncol = 14)+
-    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
-    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
-    theme(axis.text.x = element_text(angle=90, hjust=1))
-
-print(p1)
-  
-}
-
-
-
-
-```
 ## summary table
 ```{r filt, results="show",warning=FALSE}
 
