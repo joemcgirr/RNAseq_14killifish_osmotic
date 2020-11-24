@@ -415,18 +415,44 @@ nrow(main_physiology_a)
 nrow(main_salinity)                  
 
 
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_salinity=main_salinity$ensembl_transcript_id,
+                main_transfer=main_transfer$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_physiology.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_physiology_a=main_physiology_a$ensembl_transcript_id,
+                main_physiology_t=main_physiology_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_clade_a=main_clade_a$ensembl_transcript_id,
+                main_clade_t=main_clade_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_condition_x_physiology.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(salinity_physiology_interaction=salinity_physiology_interaction$ensembl_transcript_id,
+                transfer_physiology_interaction=transfer_physiology_interaction$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_condition_x_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(salinity_clade_interaction=salinity_clade_interaction$ensembl_transcript_id,
+                transfer_clade_interaction=transfer_clade_interaction$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_physiology_x_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(clade_physiology_interaction_a=clade_physiology_interaction_a$ensembl_transcript_id,
+                clade_physiology_interaction_t=clade_physiology_interaction_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_threeway.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(threeway_a=threeway_a$ensembl_transcript_id,
+                threeway_t=threeway_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
 
-plot(euler(list(main_salinity=main_salinity$ensembl_transcript_id,main_transfer=main_transfer$ensembl_transcript_id)),
-     quantities = TRUE, labels = c("",""))
-#length(intersect(main_salinity$ensembl_transcript_id,main_transfer$ensembl_transcript_id))
-plot(euler(list(main_physiology_a=main_physiology_a$ensembl_transcript_id,main_physiology_t=main_physiology_t$ensembl_transcript_id)),
-     quantities = TRUE, labels = c("",""))
-plot(euler(list(main_clade_a=main_clade_a$ensembl_transcript_id,main_clade_t=main_clade_t$ensembl_transcript_id)),
-     quantities = TRUE, labels = c("",""))
-plot(euler(list(main_salinity_physiology_interaction=main_salinity_physiology_interaction$ensembl_transcript_id,
-                main_transfer_physiology_interaction=main_transfer_physiology_interaction$ensembl_transcript_id)),
-     quantities = TRUE, labels = c("",""))
-plot(euler(list(main_salinity_physiology_interaction=main_salinity_physiology_interaction$ensembl_transcript_id,
-                main_transfer_physiology_interaction=main_transfer_physiology_interaction$ensembl_transcript_id)),
-     quantities = TRUE, labels = c("",""))
+
+
+
+
 ```
