@@ -1,0 +1,245 @@
+---
+title: "Kilifish PGLS"
+author: "Joe McGirr"
+date: "12/2/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+packages<-function(x){
+  x<-as.character(match.call()[[2]])
+  if (!require(x,character.only=TRUE)){
+    install.packages(pkgs=x,repos="http://cran.r-project.org")
+    require(x,character.only=TRUE)
+  }
+}
+
+packages(dplyr)
+packages(tidyr)
+packages(edgeR)
+packages(limma)
+
+source("https://github.com/janejpark/niehs/raw/master/final_scripts/fun_MeanVar_all.R")
+```
+
+## Input: Salmon quantification counts. Output: library size normalized counts.
+Same pipeline as Lisa's. Skip below to read in normalized counts.
+
+```{r loadfiles, results='hide', include=FALSE, warning=FALSE, eval = FALSE}
+
+counts_design <- read.csv("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/raw/main/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
+
+
+
+
+# I removed the same samples from species with low numbers of replicates (*F. zebrinus*, *F. nottii*, *F. sciadicus*).  
+
+
+#dim(counts_design)
+
+# -----------------------
+# Determine which columns to drop
+# based on sample size
+# Drop columns with no data
+# -----------------------
+
+#length(counts_design)
+samps <- as.data.frame(colnames(counts_design)[3:length(counts_design)])
+samps <- samps %>% separate(`colnames(counts_design)[3:length(counts_design)]`, , into = c("species", "genus", "treatment","replicate"), sep = "_")
+samps$group <- paste(samps$species,samps$genus,samps$treatment, sep = ":")
+#table(samps$group)
+#length(unique(paste(samps$species,samps$genus)))
+
+samps_t <- samps %>% filter(treatment == "transfer")
+samps_b <- samps %>% filter(treatment == "BW")
+samps_f <- samps %>% filter(treatment == "FW")
+
+#length(unique(paste(samps_t$species,samps_t$genus, samps_t$treatment)))
+#length(unique(paste(samps_b$species,samps_b$genus, samps_b$treatment)))
+#length(unique(paste(samps_f$species,samps_f$genus, samps_f$treatment)))
+#setdiff(unique(paste(samps_f$species,samps_f$genus)),
+#        unique(paste(samps_t$species,samps_t$genus)))
+
+design <- counts_design[counts_design$Ensembl == 'Empty',]
+#design$type <- c("species","native_salinity","clade","group","condition")
+
+# dropping all zebrinus, nottii, sciadicus, due to sample size
+drops <- c("X","Ensembl",
+           "F_zebrinus_BW_1.quant","F_zebrinus_BW_2.quant",
+           "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
+           "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
+           "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant",
+           "F_sciadicus_FW_2.quant","F_sciadicus_transfer_1.quant")
+
+bw_drops <- grep('_BW_', colnames(counts_design), value=TRUE)
+
+counts<-counts_design[!counts_design$Ensembl == 'Empty',]
+rownames(counts)<-counts$Ensembl
+design <- design[ , !(names(design) %in% drops)]
+counts <- counts[ , !(names(counts) %in% drops)]
+design <- design[ , !(names(design) %in% bw_drops)]
+counts <- counts[ , !(names(counts) %in% bw_drops)]
+print("dim design")
+dim(design)
+print("dim counts")
+dim(counts)
+gene.names<-rownames(counts)
+design[] <- lapply( design, factor)
+
+
+
+## Sample Design Matrix
+
+#Same model with fixed effects, but condition = transfer: 
+
+# ~physiology*condition*clade
+
+
+# --------------------
+# design categories
+# --------------------
+
+species<-as.character(unlist(design[1,]))
+physiology<-as.character(unlist(design[2,]))
+clade<-as.character(unlist(design[3,]))
+condition<-as.character(unlist(design[5,]))
+condition_physiology<-as.vector(paste(condition,physiology,sep="."))
+condition_physiology_clade <- as.vector(paste(condition_physiology,clade,sep="."))
+condition_physiology_clade <- as.vector(paste("group",condition_physiology_clade,sep=""))
+cols<-colnames(counts)
+ExpDesign <- data.frame(row.names=cols,
+                        condition=condition,
+                        physiology = physiology,
+                        clade = clade,
+                        species = species,
+                        sample=cols)
+#ExpDesign
+# used for pairwise contrasts
+#form<-as.formula("~0 + physiology*condition*clade")
+form<-as.formula("~physiology*condition*clade")
+design = model.matrix(form, ExpDesign)
+#group <- interaction(physiology, condition, clade)
+#mm <- model.matrix(~0 + group)
+#colnames(design)
+# check rank of matrix
+#Matrix::rankMatrix( design )
+#dim(design)
+clade <- ExpDesign$clade
+physiology <- ExpDesign$physiology
+
+#write.table(ExpDesign,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign.txt",sep="\t",quote=FALSE, row.names = FALSE)
+
+
+## Filtering and Normalization
+
+# I kept all of this the same  
+
+
+#Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
+
+counts<-as.matrix(as.data.frame(sapply(counts, as.numeric)))
+rownames(counts)<-gene.names
+#class(counts)
+#test<-counts %>% drop_na()
+#test<-as.matrix(test)
+lcom_unfilt<-log2(counts+1)
+#plot(colSums(t(lcom_unfilt)))
+
+keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = 10, min.total.count = 100)
+counts.filt <- counts[keep,]
+print("filtered_counts")
+dim(counts.filt)
+#write.table(counts.filt,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/exp.tsv",sep="\t",quote=FALSE)
+
+
+
+## biomaRt annotation
+
+# ============================================
+# biomart annotation
+# https://uswest.ensembl.org/Fundulus_heteroclitus/Info/Index
+# ============================================
+
+ensembl=useMart("ENSEMBL_MART_ENSEMBL")
+ensembl = useDataset("fheteroclitus_gene_ensembl",mart=ensembl)
+# test
+# id <- c("ENSGMOP00000000001.1","ENSGMOP00000000002.1","ENSGMOP00000000003.1")
+ensembl_proteinID <- rownames(counts)
+ensembl_proteinID <- unlist(strsplit(ensembl_proteinID,split="[.]1"))
+
+#length(ensembl_proteinID)
+# can take >5 min
+# do only once
+ann<-getBM(attributes=c('ensembl_peptide_id','ensembl_transcript_id','ensembl_gene_id','gene_biotype','external_gene_name','description'), filters = 'ensembl_peptide_id', values = ensembl_proteinID, mart=ensembl)
+#head(ann)
+#dim(ann)
+#length(unique(ann$ensembl_peptide_id))
+ann <- ann[!duplicated(ann[,c(1)]),]
+#dim(ann)
+#write.table(ann,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/annotations.tsv",sep="\t",quote=FALSE)
+
+
+## normalize
+
+
+print("log counts before DE")
+boxplot(log(counts.filt+1), las = 2, main = "")
+
+genes = DGEList(count = counts.filt, group = condition_physiology_clade)
+genes = calcNormFactors(genes)
+
+# write normalized counts
+tmp <- as.data.frame(cpm(genes))
+tmp$Ensembl <- rownames(tmp)
+tmp <- dplyr::select(tmp, Ensembl, everything())
+#write.csv(tmp, file = file.path("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/normalized_counts.csv"), quote = F, row.names = F)
+
+```
+
+# Normalize with Jane's method
+
+## Read in library normalized counts
+```{r, results="show",message=FALSE, warning=FALSE, error=TRUE}
+lib_norm_counts <- read.csv("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/blob/main/DE/DE_limma_FW_v_transfer/normalized_counts.csv?raw=true",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+head(lib_norm_counts)
+
+```
+
+## Normalize and Log Transform Read Counts
+
+```{r}
+#Transform count + constant: 
+trans <- log2(lib_norm_counts+50)
+```
+
+## Normalize log-transformed counts for all samples: 
+
+```{r}
+mean_counts <- colMeans(trans)
+norm_counts <- sweep(trans, 2, colMeans(trans), "-")
+grandmean <- mean(mean_counts)
+norm_counts <- norm_counts + grandmean
+head(norm_counts)
+range(norm_counts)
+
+```
+
+## Calculate mean and standard deviation of each gene for every treatment after normalization, whole data set: 
+
+```{r}
+#Calculate and visualize mean and standard deviation of each gene for every treatment after normalization, whole data set: 
+ttrans <- t(norm_counts)
+ttrans <- as.data.frame(ttrans)
+ttrans$trt <- y$samples$trt
+
+mv <- MeanVar(ttrans)
+mea <- as.vector(mv$mean)
+sd <- as.vector(mv$stdev)
+slope <- (coef(lm(sd~mea))[2])
+print(slope)
+
+```
