@@ -1,0 +1,458 @@
+---
+title: "DE plots"
+author: "Joe McGirr"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    collapsed: no
+    df_print: paged
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_notebook:
+    toc: yes
+    toc_depth: 5
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(eulerr)
+#BiocManager::install("visFuns.R")
+
+
+# color-blind friendly 
+# Wong, B. Points of view: Color blindness. Nat Methods (2011).
+bla <- "#000000"
+blu <- "#0072b2"
+grb <- "#56b4e9"
+lir <- "#cc79a7"
+gre <- "#009e73"
+red <- "#d55e00"
+org <- "#e69f00"
+yel <- "#f0e442"
+gry<-  '#BBBBBB'
+
+```
+
+# plot normalized counts
+## transfer experiments
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+head(norm_counts)
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+#meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+#meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+#meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+comp <- "main_transfer"
+
+
+plot_all_species_phys <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","L_goodei","F_notatus","F_olivaceous","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","F_parvapinis","L_parva","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
+
+counts <- counts[c("gene","physiology","condition", "clade")]
+p2 <- counts %>% 
+  gather(variable, value, -gene) %>%
+  ggplot(aes(factor(value), gene)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_x", nrow = 1, strip.position = "bottom") +
+  theme_minimal()+
+  ylab("log2 normalized counts\n")+
+  theme(panel.spacing = unit(0, "lines"),
+        #panel.border = element_rect(fill = NA),
+        panel.background = element_rect(fill = NA),
+        axis.title.x = element_blank(),
+        legend.position = "none",
+        strip.placement = "outside")
+
+p <- ggarrange(p1, p2, 
+          labels = c("A", "B"),
+          ncol = 1, nrow = 2)
+print(p)  
+
+  
+}
+
+plot_all_species <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+p1<-ggplot(counts, aes(x=condition, y=gene, col = physiology, fill = species)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_color_manual(values=c("black","grey"))+
+    #scale_fill_manual(values = c(red,pur,blu))+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
+
+counts <- counts[c("gene","physiology","condition", "clade")]
+p2 <- counts %>% 
+  gather(variable, value, -gene) %>%
+  ggplot(aes(factor(value), gene)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_x", nrow = 1, strip.position = "bottom") +
+  theme_minimal()+
+  ylab("log2 normalized counts\n")+
+  theme(panel.spacing = unit(0, "lines"),
+        #panel.border = element_rect(fill = NA),
+        panel.background = element_rect(fill = NA),
+        axis.title.x = element_blank(),
+        legend.position = "none",
+        strip.placement = "outside")
+
+p <- ggarrange(p1, p2, 
+          labels = c("A", "B"),
+          ncol = 1, nrow = 2)
+print(p)  
+
+  
+}
+
+
+for (comp in comps){
+plot_all_species_phys(comp)
+}
+
+comp <- "transfer_physiology_interaction"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+p1<-ggplot(counts, aes(x=condition, y=gene, fill = physiology)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    scale_fill_manual(values=c(blu,red))+
+    ylab("log2 normalized counts\n")+
+    ggtitle(paste(comp," top DE\n", sig_genes$X[1], sep = ""))
+print(p1)
+
+
+comp <- "clade_physiology_interaction"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+p1<-ggplot(counts, aes(x=clade, y=gene, fill = physiology)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    scale_fill_manual(values=c(blu,red))+
+    ylab("log2 normalized counts\n")+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
+print(p1)
+
+comp <- "transfer_clade_interaction"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+p1<-ggplot(counts, aes(x=condition, y=gene, fill = clade)) +
+    geom_boxplot(outlier.shape = NA)+
+    theme_minimal()+
+    scale_fill_manual(values=c(blu,red,yel))+
+    ylab("log2 normalized counts\n")+
+    ggtitle(paste(comp," top DE\n", sig_genes[1,1], sep = ""))
+print(p1)
+
+
+# plot top DE gene for comp
+
+plot_all_species_panels <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))
+
+print(p1)
+  
+}
+
+
+# plot specific genes by name
+
+# transfer comps
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+comp <- "main_physiology"
+all_species_gene_transfer<- function(gene_name,comp){
+    
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
+sig_genes <- sig_genes[sig_genes$gene_name == gene_name,]
+if (nrow(sig_genes) == 0){
+  print("gene name not found!")
+} else {
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+}
+}
+
+gene_name <- "cftr"
+comp <- "main_transfer"
+all_species_gene_transfer(gene_name, comp)
+
+gene_name <- "aqp3"
+comp <- "main_transfer"
+all_species_gene_transfer(gene_name, comp)
+
+```
+
+## acclimation experiments
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_BW/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+head(norm_counts)
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+#meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+#meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+#meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+
+comps <- c("clade_physiology_interaction","salinity_physiology_interaction","salinity_clade_interaction","threeway","main_clade","main_physiology","main_salinity")
+comp <- "main_salinity"
+
+
+# plot top DE gene for comp
+
+plot_all_species_panels <- function(comp){
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))
+
+print(p1)
+  
+}
+
+
+# plot specific genes by name
+
+all_species_gene_acclimate<- function(gene,comp){
+ 
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
+sig_genes <- sig_genes[which(sig_genes$gene_name == gene_name),]
+if (nrow(sig_genes) == 0){
+  print("gene name not found!")
+} else {
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts$species <- factor(counts$species,levels = c("F_catanatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvapinis","L_parva","F_notatus","F_olivaceous","A_xenica","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_acclimate.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+}
+}
+
+gene_name <- "cftr"
+comp <- "main_salinity"
+all_species_gene_acclimate(gene_name, comp)
+
+gene_name <- "aqp3"
+comp <- "main_salinity"
+all_species_gene_acclimate(gene_name, comp)
+
+```
+
+# transfer and acclimation venn
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+main_transfer <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/main_transfer.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+main_clade_t <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/main_clade.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway_t <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/threeway.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+transfer_clade_interaction <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_clade_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+transfer_physiology_interaction <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+clade_physiology_interaction_t <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/clade_physiology_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+main_physiology_t <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/main_physiology.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+
+clade_physiology_interaction_a <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/clade_physiology_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+salinity_physiology_interaction <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/salinity_physiology_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+salinity_clade_interaction <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/salinity_clade_interaction.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway_a <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/threeway.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+main_clade_a <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/main_clade.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+main_physiology_a <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/main_physiology.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+main_salinity <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/main_salinity.csv",stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+
+clade_physiology_interaction_t  <- clade_physiology_interaction_t  [which(clade_physiology_interaction_t$adj.P.Val < 0.05) ,]
+transfer_physiology_interaction <- transfer_physiology_interaction [which(transfer_physiology_interaction$adj.P.Val < 0.05) ,]
+transfer_clade_interaction      <- transfer_clade_interaction      [which(transfer_clade_interaction$adj.P.Val < 0.05) ,]
+threeway_t                      <- threeway_t                      [which(threeway_t$adj.P.Val < 0.05) ,]
+main_clade_t                    <- main_clade_t                    [which(main_clade_t$adj.P.Val < 0.05) ,]
+main_physiology_t               <- main_physiology_t[main_physiology_t$adj.P.Val < 0.05 ,]
+main_transfer                   <- main_transfer                   [which(main_transfer$adj.P.Val < 0.05) ,]
+
+clade_physiology_interaction_a  <- clade_physiology_interaction_a  [which(clade_physiology_interaction_a$adj.P.Val < 0.05) ,]
+salinity_physiology_interaction <- salinity_physiology_interaction [which(salinity_physiology_interaction$adj.P.Val < 0.05) ,]
+salinity_clade_interaction      <- salinity_clade_interaction      [which(salinity_clade_interaction$adj.P.Val < 0.05) ,]
+threeway_a                      <- threeway_a                      [which(threeway_a$adj.P.Val < 0.05) ,]
+main_clade_a                    <- main_clade_a                    [which(main_clade_a$adj.P.Val < 0.05) ,]
+main_physiology_a               <- main_physiology_a               [which(main_physiology_a$adj.P.Val < 0.05) ,]
+main_salinity                   <- main_salinity                   [which(main_salinity$adj.P.Val < 0.05) ,]
+
+nrow(clade_physiology_interaction_t) 
+nrow(transfer_physiology_interaction) 
+nrow(transfer_clade_interaction)      
+nrow(threeway_t)                      
+nrow(main_clade_t)                    
+nrow(main_physiology_t)               
+nrow(main_transfer)                   
+nrow(clade_physiology_interaction_a) 
+nrow(salinity_physiology_interaction)
+nrow(salinity_clade_interaction)     
+nrow(threeway_a)                     
+nrow(main_clade_a)                  
+nrow(main_physiology_a)              
+nrow(main_salinity)                  
+
+
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_salinity=main_salinity$ensembl_transcript_id,
+                main_transfer=main_transfer$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_physiology.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_physiology_a=main_physiology_a$ensembl_transcript_id,
+                main_physiology_t=main_physiology_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(main_clade_a=main_clade_a$ensembl_transcript_id,
+                main_clade_t=main_clade_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_condition_x_physiology.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(salinity_physiology_interaction=salinity_physiology_interaction$ensembl_transcript_id,
+                transfer_physiology_interaction=transfer_physiology_interaction$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_condition_x_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(salinity_clade_interaction=salinity_clade_interaction$ensembl_transcript_id,
+                transfer_clade_interaction=transfer_clade_interaction$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_physiology_x_clade.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(clade_physiology_interaction_a=clade_physiology_interaction_a$ensembl_transcript_id,
+                clade_physiology_interaction_t=clade_physiology_interaction_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_threeway.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(threeway_a=threeway_a$ensembl_transcript_id,
+                threeway_t=threeway_t$ensembl_transcript_id)),
+     quantities = TRUE, labels = c("",""))
+#dev.off()
+
+
+
+
+
+```

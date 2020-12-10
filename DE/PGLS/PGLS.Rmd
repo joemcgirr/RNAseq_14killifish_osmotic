@@ -19,7 +19,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE, eval = FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 packages<-function(x){
@@ -54,7 +54,9 @@ packages(emmeans)
 packages(data.table)
 packages(ggpubr)
 
-source("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/raw/main/DE/PGLS/fun_MeanVar_all.R")
+library(ape)
+library(geiger)
+library(nlme)
 
 # color-blind friendly 
 # Wong, B. Points of view: Color blindness. Nat Methods (2011).
@@ -70,54 +72,19 @@ gry<-  '#BBBBBB'
 
 ```
 
-# Exploring mean variance trends to find a stablizing constant that will allow for differential expression analysis in a phylogenetic comparitive framework.
+# PGLS
 
+## create log2(counts+constant) matrix (transfer)
 
-## This is what mean-sd looks like after normalizing with limma's voom function
+### load transfer experiment counts with new minimum count filter
 
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/voom.png)
+For each `condition_physiology_clade` group (regardless of species), each sample must have a minimum count of 10, and a group minimum total count of 30.
 
-
-## This is Fig. 5 from Rocke et al 2015
-
-link to paper https://doi.org/10.1101/018739
-
-From the paper: "One way to estimate the best value of θ is to regress the gene-and-condition-specific
-variance on the gene-and-condition-specific mean, and find a value of θ for which the variance neither
-increases systematically with the mean nor decreases systematically. We can operationalize this by
-finding a value of θ for which the slope is zero, and this is how the “about right” value was estimated."
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/rocke_et_al_2015_fig_5.PNG)
-
-
-## This is the raw mean variance trend (no normalization)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_raw.png)
-
-
-## This is the mean variance trend after normalizing ONLY for library size with limma and then using Jane's/Rocke's method of adding a constant and log transforming
-
-The constant (1.2426) has been chosen such that slope = 0
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_minimized_slope.png)
-
-## This is the mean sqrt(sd) trend using the same constant
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_minimized_var_slope.png)
-
-
-```{r loadfiles, results='hide', include=FALSE, warning=FALSE, eval = FALSE}
+```{r loadfiles, results='hide', include=FALSE, warning=FALSE}
 
 # section 5.3 for normalizing for library size
 #https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html#normalising-gene-expression-distributions
 
-constants <- c(1,10,30,1,10,30)
-min_counts <- c(10,10,10,30,30,30)
-min_total_counts <- c(100,100,100,300,300,300)
-
-
-for (j in c(1:6))
-{
 
 #counts_design <- read.csv("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/raw/main/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
 counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
@@ -236,7 +203,10 @@ rownames(counts)<-gene.names
 lcom_unfilt<-log2(counts+1)
 #plot(colSums(t(lcom_unfilt)))
 
-keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = min_counts[j], min.total.count = min_total_counts[j])
+#lisa's minimun count filter
+#keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = 10, min.total.count = 100)
+#joe's minimum count filter
+keep<-filterByExpr(counts,design = design,group=condition_physiology_clade,min.count = 10, min.total.count = 30)
 counts.filt <- counts[keep,]
 #print("filtered_counts")
 #dim(counts.filt)
@@ -285,8 +255,35 @@ lib_norm_counts <- cpm
 
 #head(lib_norm_counts)
 
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+
+
+
+
+```
+
+### determine appropriate constant
+
+```{r, results = 'hide'}
+
+
+js <- c(1,2,5,10)
+#js <- c(0.001,0.01,0.1,0.5)
+#js <- seq(from = 0.3524, to = 0.3525, by = 0.00001)
+js <- c(0.35243)
+
+slopes <- c()
+
+for (j in js){
 #Transform count + constant:
-constant <- constants[j]
+constant <- j
 trans <- log2(lib_norm_counts+constant)
 
 mean_counts <- colMeans(trans)
@@ -301,14 +298,6 @@ ttrans <- t(head(norm_counts))
 ttrans <- t(norm_counts)
 ttrans <- as.data.frame(ttrans)
 
-meta <- read.table("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/blob/main/DE/ExpDesign_FW_v_transfer.txt?raw=true",stringsAsFactors = FALSE, header = TRUE)
-rownames(meta) <- meta$sample
-meta <- meta[,-5]
-meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
-meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
-meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
-meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
-meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
 
 	genelist <- colnames(ttrans)
 	ttrans$trt <- meta$condition
@@ -366,255 +355,47 @@ mea <- as.vector(mv$mean)
 sd <- as.vector(mv$stdev)
 slope <- (coef(lm(sd~mea))[2])
 #print(slope)
-
-
-#Visualize mean-standard deviation relationship after normalization: 
-
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sd_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
-plot(mea,sd,xlab = "mean", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-SD relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),"\nmin counts = ",min_counts[j],sep = ""))
-abline(coef(lm(sd~mea)),col="red",lwd=3)
-lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
-#dev.off()
-
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
-plot(mea,sd,xlab = "mean",ylab = "variance", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-SD relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),"\nmin counts = ",min_counts[j],sep = ""))
-abline(coef(lm(sd~mea)),col="red",lwd=3)
-lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
-#dev.off()
-
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
-plot(mea,sqrt(sd),xlab = "mean", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-sqrt(SD) relationship of Normalized Log(counts + ",constant,")\nmin counts = ",min_counts[j],sep = ""))
-lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
-#dev.off()
-
+slopes <- c(slopes, slope[[1]])
 }
+#slopes
+df <- data.frame(slopes,js)
+df
+df[which(abs(df$slopes) == min(abs(df$slopes))),]
+
+
+constant <- 0.35243
+# slope = -1.273828e-06
+
+trans <- log2(lib_norm_counts+constant)
+head(trans)
+#write.table(trans, "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt")
+
+
 
 ```
 
-## These are plots I made while playing around with different constants and minimum count thresholds
+###Visualize mean-standard deviation relationship after normalization: 
 
-Lisa's original count threshold:  
-min_count = 10  
-min_total_count = 100 
-
-Jane's original constant = 15
-
-using different constants and minimum read count thresholds
-
-constants <- c(1,10,30,1,10,30)
-
-min_counts <- c(10,10,10,30,30,30)
-min_total_counts <- c(100,100,100,300,300,300)
+```{r}
 
 
-```{r, results='hide', include=FALSE, warning=FALSE, eval = FALSE}
-
-constants <- c(1,10,30,1,10,30)
-min_counts <- c(10,10,10,30,30,30)
-min_total_counts <- c(100,100,100,300,300,300)
-j <- 1
-
-
-{
-#counts_design <- read.csv("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/raw/main/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
-counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/expression_tables/Ensembl_species_counts_designfactors.csv",stringsAsFactors = FALSE)
-
-
-# I removed the same samples from species with low numbers of replicates (*F. zebrinus*, *F. nottii*, *F. sciadicus*).  
-
-
-#dim(counts_design)
-
-# -----------------------
-# Determine which columns to drop
-# based on sample size
-# Drop columns with no data
-# -----------------------
-
-#length(counts_design)
-samps <- as.data.frame(colnames(counts_design)[3:length(counts_design)])
-samps <- samps %>% separate(`colnames(counts_design)[3:length(counts_design)]`, , into = c("species", "genus", "treatment","replicate"), sep = "_")
-samps$group <- paste(samps$species,samps$genus,samps$treatment, sep = ":")
-#table(samps$group)
-#length(unique(paste(samps$species,samps$genus)))
-
-samps_t <- samps %>% filter(treatment == "transfer")
-samps_b <- samps %>% filter(treatment == "BW")
-samps_f <- samps %>% filter(treatment == "FW")
-
-#length(unique(paste(samps_t$species,samps_t$genus, samps_t$treatment)))
-#length(unique(paste(samps_b$species,samps_b$genus, samps_b$treatment)))
-#length(unique(paste(samps_f$species,samps_f$genus, samps_f$treatment)))
-#setdiff(unique(paste(samps_f$species,samps_f$genus)),
-#        unique(paste(samps_t$species,samps_t$genus)))
-
-design <- counts_design[counts_design$Ensembl == 'Empty',]
-#design$type <- c("species","native_salinity","clade","group","condition")
-
-# dropping all zebrinus, nottii, sciadicus, due to sample size
-drops <- c("X","Ensembl",
-           "F_zebrinus_BW_1.quant","F_zebrinus_BW_2.quant",
-           "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
-           "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
-           "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant",
-           "F_sciadicus_FW_2.quant","F_sciadicus_transfer_1.quant")
-
-bw_drops <- grep('_BW_', colnames(counts_design), value=TRUE)
-
-counts<-counts_design[!counts_design$Ensembl == 'Empty',]
-rownames(counts)<-counts$Ensembl
-design <- design[ , !(names(design) %in% drops)]
-counts <- counts[ , !(names(counts) %in% drops)]
-design <- design[ , !(names(design) %in% bw_drops)]
-counts <- counts[ , !(names(counts) %in% bw_drops)]
-#print("dim design")
-#dim(design)
-#print("dim counts")
-#dim(counts)
-gene.names<-rownames(counts)
-design[] <- lapply( design, factor)
-
-
-
-## Sample Design Matrix
-
-#Same model with fixed effects, but condition = transfer: 
-
-# ~physiology*condition*clade
-
-
-# --------------------
-# design categories
-# --------------------
-
-species<-as.character(unlist(design[1,]))
-physiology<-as.character(unlist(design[2,]))
-clade<-as.character(unlist(design[3,]))
-condition<-as.character(unlist(design[5,]))
-condition_physiology<-as.vector(paste(condition,physiology,sep="."))
-condition_physiology_clade <- as.vector(paste(condition_physiology,clade,sep="."))
-condition_physiology_clade <- as.vector(paste("group",condition_physiology_clade,sep=""))
-cols<-colnames(counts)
-ExpDesign <- data.frame(row.names=cols,
-                        condition=condition,
-                        physiology = physiology,
-                        clade = clade,
-                        species = species,
-                        sample=cols)
-#ExpDesign
-# used for pairwise contrasts
-#form<-as.formula("~0 + physiology*condition*clade")
-form<-as.formula("~physiology*condition*clade")
-design = model.matrix(form, ExpDesign)
-#group <- interaction(physiology, condition, clade)
-#mm <- model.matrix(~0 + group)
-#colnames(design)
-# check rank of matrix
-#Matrix::rankMatrix( design )
-#dim(design)
-clade <- ExpDesign$clade
-physiology <- ExpDesign$physiology
-
-#write.table(ExpDesign,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/ExpDesign.txt",sep="\t",quote=FALSE, row.names = FALSE)
-
-
-## Filtering and Normalization
-
-# I kept all of this the same  
-
-
-#Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
-
-counts<-as.matrix(as.data.frame(sapply(counts, as.numeric)))
-rownames(counts)<-gene.names
-#class(counts)
-#test<-counts %>% drop_na()
-#test<-as.matrix(test)
-lcom_unfilt<-log2(counts+1)
-#plot(colSums(t(lcom_unfilt)))
-
-keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = min_counts[j], min.total.count = min_total_counts[j])
-counts.filt <- counts[keep,]
-#print("filtered_counts")
-#dim(counts.filt)
-#write.table(counts.filt,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/exp.tsv",sep="\t",quote=FALSE)
-
-
-
-## biomaRt annotation
-
-# ============================================
-# biomart annotation
-# https://uswest.ensembl.org/Fundulus_heteroclitus/Info/Index
-# ============================================
-
-ensembl=useMart("ENSEMBL_MART_ENSEMBL")
-ensembl = useDataset("fheteroclitus_gene_ensembl",mart=ensembl)
-# test
-# id <- c("ENSGMOP00000000001.1","ENSGMOP00000000002.1","ENSGMOP00000000003.1")
-ensembl_proteinID <- rownames(counts)
-ensembl_proteinID <- unlist(strsplit(ensembl_proteinID,split="[.]1"))
-
-#length(ensembl_proteinID)
-# can take >5 min
-# do only once
-ann<-getBM(attributes=c('ensembl_peptide_id','ensembl_transcript_id','ensembl_gene_id','gene_biotype','external_gene_name','description'), filters = 'ensembl_peptide_id', values = ensembl_proteinID, mart=ensembl)
-#head(ann)
-#dim(ann)
-#length(unique(ann$ensembl_peptide_id))
-ann <- ann[!duplicated(ann[,c(1)]),]
-#dim(ann)
-#write.table(ann,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/annotations.tsv",sep="\t",quote=FALSE)
-
-#print("log counts before DE")
-#boxplot(log(counts.filt+1), las = 2, main = "")
-
-genes = DGEList(count = counts.filt, group = condition_physiology_clade)
-genes = calcNormFactors(genes)
-
-#head(genes)
-
-# counts per million normalized by library size from genes$samples$norm.factors
-cpm <- cpm(genes$counts, log = FALSE,normalized.lib.sizes = TRUE)
-
-lib_norm_counts <- cpm
-#lib_norm_counts$Ensembl <- NULL
-
-#head(lib_norm_counts)
-
-}
-
-meta <- read.table("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/blob/main/DE/ExpDesign_FW_v_transfer.txt?raw=true",stringsAsFactors = FALSE, header = TRUE)
-rownames(meta) <- meta$sample
-meta <- meta[,-5]
-meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
-meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
-meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
-meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
-meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
-
-
-
-js <- seq(from = 1.242, to = 1.244, by = 0.0001)
-js <- c(1.2426)
-js <- c(0)
-slopes <- c()
-
-#Transform count + constant:
-for (j in js){
-constant <- j
-
-trans <- log2(lib_norm_counts+constant)
 mean_counts <- colMeans(trans)
 norm_counts <- sweep(trans, 2, colMeans(trans), "-")
 grandmean <- mean(mean_counts)
 norm_counts <- norm_counts + grandmean
+#head(norm_counts)
+#range(norm_counts)
+
+
 ttrans <- t(head(norm_counts))
 ttrans <- t(norm_counts)
 ttrans <- as.data.frame(ttrans)
+
+
 	genelist <- colnames(ttrans)
 	ttrans$trt <- meta$condition
 	treat <- unique(ttrans$trt)
+
 	#adjusting fun_MeanVar_all.R
 	
 	meandat <- matrix(nrow=length(treat), ncol=length(genelist))
@@ -629,62 +410,46 @@ ttrans <- as.data.frame(ttrans)
 	
 	# swap this for sd instead of variance
 	
-	 vardat <- matrix(nrow=length(treat), ncol=length(genelist))
-	 colnames(vardat) <- genelist
-	 rownames(vardat) <- treat 
-	 for (i in 1:length(treat)) {
-	 	if (length(which(ttrans$trt==treat[i])) > 1) {
-	 		a <- which(ttrans$trt==treat[i])
-	 		#print(a)
-	 		n <- apply(ttrans[a,1:(dim(ttrans)[2]-1)], 2, sd, na.rm=TRUE)
-	 		#print(n)
-	 		b <- which(rownames(vardat)==treat[i])
-	 		#print(b)
-	 		vardat[b,] <- n 
-	 		}	
-	#vardat <- matrix(nrow=length(treat), ncol=length(genelist))
-	#colnames(vardat) <- genelist
-	#rownames(vardat) <- treat 
-	#for (i in 1:length(treat)) {
-	#	if (length(which(ttrans$trt==treat[i])) > 1) {
-	#		a <- which(ttrans$trt==treat[i])
-	#		#print(a)
-	#		n <- apply(ttrans[a,1:(dim(ttrans)[2]-1)], 2, var, na.rm=TRUE)
-	#		#print(n)
-	#		b <- which(rownames(vardat)==treat[i])
-	#		#print(b)
-	#		vardat[b,] <- n 
-	#		}
+	# vardat <- matrix(nrow=length(treat), ncol=length(genelist))
+	# colnames(vardat) <- genelist
+	# rownames(vardat) <- treat 
+	# for (i in 1:length(treat)) {
+	# 	if (length(which(ttrans$trt==treat[i])) > 1) {
+	# 		a <- which(ttrans$trt==treat[i])
+	# 		#print(a)
+	# 		n <- apply(ttrans[a,1:(dim(ttrans)[2]-1)], 2, sd, na.rm=TRUE)
+	# 		#print(n)
+	# 		b <- which(rownames(vardat)==treat[i])
+	# 		#print(b)
+	# 		vardat[b,] <- n 
+	# 		}
+	
+	vardat <- matrix(nrow=length(treat), ncol=length(genelist))
+	colnames(vardat) <- genelist
+	rownames(vardat) <- treat 
+	for (i in 1:length(treat)) {
+		if (length(which(ttrans$trt==treat[i])) > 1) {
+			a <- which(ttrans$trt==treat[i])
+			#print(a)
+			n <- apply(ttrans[a,1:(dim(ttrans)[2]-1)], 2, var, na.rm=TRUE)
+			#print(n)
+			b <- which(rownames(vardat)==treat[i])
+			#print(b)
+			vardat[b,] <- n 
+			}
 	}
 	mv <- list(mean=meandat, stdev=vardat)
+
 
 #mv <- MeanVar(ttrans)
 mea <- as.vector(mv$mean)
 sd <- as.vector(mv$stdev)
 slope <- (coef(lm(sd~mea))[2])
-#print(slope[[1]])
-slopes <- c(slopes,slope[[1]])
-}
 
-# slope is minimized at 1.2426
-
-#Visualize mean-standard deviation relationship after normalization: 
-
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sd_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
-plot(mea,sd,xlab = "mean", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-SD relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),"\nmin counts = ",min_counts[j],sep = ""))
-abline(coef(lm(sd~mea)),col="red",lwd=3)
-lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
-#dev.off()
 
 #png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
-#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_raw.png",height = 4.5, width = 7, units = 'in', res = 600)
-#plot(mea,sd,xlab = "mean",ylab = "variance", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-Variance relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),"\nmin counts = ",min_counts[j],sep = ""))
+plot(mea,sd,xlab = "mean",ylab = "variance", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-Var relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),sep = ""))
 abline(coef(lm(sd~mea)),col="red",lwd=3)
-lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
-#dev.off()
-
-#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_minimized_var_slope.png",height = 4.5, width = 7, units = 'in', res = 600)
-plot(mea,sqrt(sd),xlab = "mean", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-sqrt(SD) relationship of Normalized Log(counts + ",constant,")\nmin counts = ",min_counts[j],sep = ""))
 lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
 #dev.off()
 
@@ -693,120 +458,129 @@ lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
 
 ```
 
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_1.png)
+## PGLS using FW samples
+
+gls(counts~physiology)
+
+```{r}
+
+meta <- read.table("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/blob/main/DE/ExpDesign_FW_v_transfer.txt?raw=true",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 
 
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_1.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_2.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_2.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_3.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_3.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_4.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_4.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_5.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_5.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_6.png)
-
-![](C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_sqrt_sd_6.png)
+####  choose gene to test
+# cftr (significant for transfer/acclimation)
+#gene <- c("ENSFHEP00000008393")
+# significant for physiology (Lisa Fig 11)
+#gene <- c("ENSFHEP00000001090")
+#gene_name <- "slc35a3a"
+# top significant for physiology 
+gene <- c("ENSFHEP00000019927")
+gene_name <- "kdm5c"
 
 
+# xxx (insignificant for physiology)
+#gene <- c("")
 
-```{r, eval = FALSE, include=FALSE, results = 'hide'}
-####### prop DE/ME vs #########
-library(evolqg)
-library(ape)
-library(geiger)
-library(nlme)
-library(phytools)
-#install.packages("phangorn")
-library(phangorn)
-library(adephylo)
-#install.packages("adephylo")
+cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
+full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
 
-comps <-read.table("C:/Users/jmcgirr/Documents/all_2018_samples/prop_ME_CRPA_crosses.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-head(comps)
-all_48 <- comps[which(comps$stage == "48hpf"),]
-all_8 <- comps[which(comps$stage == "8dpf"),]
-generalists_48 <- comps[which(comps$stage == "48hpf" & comps$specialist == "n"),]
-generalists_8 <- comps[which(comps$stage == "8dpf" & comps$specialist == "n"),]
+# drop condition
+drops <- grep('_FW_', colnames(cts), value=TRUE)
+#drops <- grep('_BW_', colnames(cts), value=TRUE)
+#drops <- grep('_transfer_', colnames(cts), value=TRUE)
 
-plot(comps$distance_km, comps$prop_DE)
-plot(comps$distance_branchlength, comps$prop_DE)
-
-#plot(generalists_48$distance_km, generalists_48$prop_DE)
-plot(all_48$distance_km, all_48$prop_DE)
-#plot(generalists_8$distance_km, generalists_8$prop_DE)
-plot(all_8$distance_km, all_8$prop_DE)
-
-plot(all_48$distance_branchlength, all_48$prop_DE)
-plot(all_8$distance_branchlength, all_8$prop_DE)
+# run PGLS 
+cts_condition <- cts[ , !(names(cts) %in% drops)]
+gene_ct <- t(subset(cts_condition, rownames(cts_condition) == gene))
+gene_ct <- merge(gene_ct,meta, by = 0)
+sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
+sp_means$tree_tip <- sp_means$Group.1
+row.names(sp_means) <- sp_means$tree_tip
+sp_means$Group.1 <- NULL
+names(sp_means) <- c("normalized_count", "Species")
+sp_means <- unique(merge(sp_means, meta[,2:4], by = c("Species")))
+sp_means <- sp_means[which(sp_means$Species != "F_heteroclitusMDPL" & sp_means$Species != "F_heteroclitusMDPP"),] 
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,sp_means$Species))
 
 
-all_cols <- c(dkr,dkr,lir,lir,yel,yel,pur,pur,bla,bla,blu,blu,red,red,whi,whi,gre,gre,grb,grb)
-sep_cols <- c(dkr,lir,yel,pur,bla,blu,red,whi,gre,grb)
-#plot(generalists_48$distance_branchlength, generalists_48$prop_DE)
-
-par(mfrow=c(2,2))
-
-comps <-read.table("C:/Users/jmcgirr/Documents/all_2018_samples/prop_DE_CRPA_crosses.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_48 <- comps[which(comps$stage == "48hpf"),]
-all_8 <- comps[which(comps$stage == "8dpf"),]
-gen_48 <- all_48[which(all_48$specialist == "n"),]
-gen_8 <- all_8[which(all_8$specialist == "n"),]
-
-#tiff("C:/Users/jmcgirr/Documents/all_2018_samples/manuscript_figs/de_me_48_8.tiff", width = 5, height = 5, units = 'in', res = 1000)
-sep_cols <- c(dkr,lir,yel,pur,bla,blu,red,whi,gre,grb)
-par(mfrow=c(2,2))
-par(mai=c(0.2,0.4,0.2,0))
-lm_all <- lm(all_48$distance_branchlength~all_48$prop_DE)
-lm_gen <- lm(gen_48$distance_branchlength~gen_48$prop_DE)
-
-plot(jitter(all_48$distance_branchlength), jitter((all_48$prop_DE)*100),pch = c(21,24)[as.factor(all_48$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,31),xlim = c(-0.02,0.45),xlab = "", ylab = "",xaxt ="n",cex.axis=1.5, yaxt = "n")
-axis(side=2, at=c(0,10,20,30), labels = TRUE, cex.axis= 1.5)
-abline(lm_all)
-abline(lm_gen)
-
-lm_all <- lm(all_8$distance_branchlength~all_8$prop_DE)
-lm_gen <- lm(gen_8$distance_branchlength~gen_8$prop_DE)
-par(mai=c(0.2,0.2,0.2,0.2))
-plot(jitter(all_8$distance_branchlength), jitter((all_8$prop_DE)*100),pch = c(21,24)[as.factor(all_8$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,31),xlim = c(-0.02,0.45),xlab = "", ylab = "", yaxt = "n",xaxt ="n")
-#abline(lm_all)
-#abline(lm_gen)
+pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = tree),
+    data = sp_means, method = "ML")
+anova(pglsModel)
 
 
-comps <-read.table("C:/Users/jmcgirr/Documents/all_2018_samples/prop_ME_CRPA_crosses.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-head(comps)
-all_48 <- comps[which(comps$stage == "48hpf" & comps$comp_type == "ph"),]
-all_8 <- comps[which(comps$stage == "8dpf"& comps$comp_type == "ph"),]
-sep_cols <- c(dkr,lir,yel,pur,grb)
-
-par(mai=c(0.4,0.4,0,0))
-plot(jitter(all_48$distance_branchlength), jitter((all_48$prop_DE)*100),pch = c(21,24)[as.factor(all_48$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,31),xlim = c(-0.02,0.45),xlab = "", ylab = "",cex.axis=1.5, yaxt = "n")
-axis(side=2, at=c(0,10,20,30), labels = TRUE, cex.axis= 1.5)
+boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
 
 
-par(mai=c(0.4,0.2,0,0.2))
-plot(jitter(all_8$distance_branchlength), jitter((all_8$prop_DE)*100),pch = c(21,24)[as.factor(all_8$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,31),xlim = c(-0.02,0.45),xlab = "", ylab = "", yaxt = "n",cex.axis=1.5)
+
+
+```
+
+```{r, eval = FALSE, include=FALSE}
+
+# plot specific genes by name
+
+# transfer comps
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+comp <- "main_physiology"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
+sig_genes <- sig_genes[sig_genes$gene_name == gene_name,]
+
+gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + Species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
 #dev.off()
 
 
 
+
+
+
+
+
+
 ## PGLS phylogenetic least squares ##https://www.r-phylo.org/wiki/HowTo/PGLS
+#library(evolqg)
+library(ape)
+library(geiger)
+library(nlme)
+#library(phytools)
+##install.packages("phangorn")
+#library(phangorn)
+#library(adephylo)
+#install.packages("adephylo")
+
 ## DE
-all_48 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/de_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
+all_48 <- read.table("D:/Martin Lab/all_2018_samples/mse_v_distance/de_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
 all_8 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/de_v_crpa_8dpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
 row.names(all_48) <- all_48$tree_tip
 row.names(all_8) <- all_8$tree_tip
