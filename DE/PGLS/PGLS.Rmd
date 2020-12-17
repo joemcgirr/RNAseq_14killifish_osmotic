@@ -72,7 +72,7 @@ gry<-  '#BBBBBB'
 
 ```
 
-# PGLS
+# PGLS workflow
 
 ## create log2(counts+constant) matrix (transfer)
 
@@ -458,13 +458,15 @@ lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
 
 ```
 
-## PGLS using FW samples
+# PGLS
+
+## physiology
 
 gls(counts~physiology)
 
 ```{r}
 
-meta <- read.table("https://github.com/joemcgirr/RNAseq_17killifish_osmotic/blob/main/DE/ExpDesign_FW_v_transfer.txt?raw=true",stringsAsFactors = FALSE, header = TRUE)
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
 meta <- meta[,-5]
 meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
@@ -491,19 +493,16 @@ gene <- c("ENSFHEP00000019927")
 gene_name <- "kdm5c"
 
 
-# xxx (insignificant for physiology)
-#gene <- c("")
-
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
 full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
 
-# drop condition
-drops <- grep('_FW_', colnames(cts), value=TRUE)
-#drops <- grep('_BW_', colnames(cts), value=TRUE)
-#drops <- grep('_transfer_', colnames(cts), value=TRUE)
+# choose physiology
+keeps <- grep('_FW_', colnames(cts), value=TRUE)
+#keeps <- grep('_BW_', colnames(cts), value=TRUE)
+#keeps <- grep('_transfer_', colnames(cts), value=TRUE)
 
 # run PGLS 
-cts_condition <- cts[ , !(names(cts) %in% drops)]
+cts_condition <- cts[ , (names(cts) %in% keeps)]
 gene_ct <- t(subset(cts_condition, rownames(cts_condition) == gene))
 gene_ct <- merge(gene_ct,meta, by = 0)
 sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
@@ -520,14 +519,80 @@ pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = 
     data = sp_means, method = "ML")
 anova(pglsModel)
 
-
 boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
-
-
 
 
 ```
 
+## condition
+use slopes to comapre same species between conditions
+
+```{r}
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+
+
+####  choose gene to test
+# significant for transfer/acclimation
+gene <- c("ENSFHEP00000008393")
+gene_name <- c("cftr")
+# significant for physiology (Lisa Fig 11)
+#gene <- c("ENSFHEP00000001090")
+#gene_name <- "slc35a3a"
+# top significant for physiology 
+#gene <- c("ENSFHEP00000019927")
+#gene_name <- "kdm5c"
+
+
+cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
+full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
+
+library(purrr)
+
+# run PGLS 
+gene_ct <- t(subset(cts, rownames(cts) == gene))
+gene_ct <- merge(gene_ct,meta, by = 0)
+gene_ct$Species_condition <- paste(gene_ct$Species, gene_ct$condition, sep = ":")
+colnames(gene_ct)[2] <- "gene"
+slopes <- gene_ct %>%
+  group_by(Species) %>% 
+  do(mod_lin = lm(gene~condition, data = .)) %>% 
+  mutate(intercept = mod_lin$coefficients[1],
+         slope = mod_lin$coefficients[2]) %>% as.data.frame()
+slopes <- slopes[c("Species","slope")]
+slopes <- unique(merge(slopes, meta[,2:4], by = c("Species")))
+row.names(slopes) <- slopes$Species
+
+slopes <- slopes[which(slopes$Species != "F_heteroclitusMDPL" & slopes$Species != "F_heteroclitusMDPP"),] 
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
+
+
+pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
+    data = slopes, method = "ML")
+anova(pglsModel)
+
+boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
+boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
+
+
+```
+
+
+#### plots
 ```{r, eval = FALSE, include=FALSE}
 
 # plot specific genes by name
