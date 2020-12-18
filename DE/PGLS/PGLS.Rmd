@@ -54,6 +54,7 @@ packages(emmeans)
 packages(data.table)
 packages(ggpubr)
 
+library(eulerr)
 library(purrr)
 library(ape)
 library(geiger)
@@ -513,6 +514,7 @@ meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 gene <- c("ENSFHEP00000019927")
 gene_name <- "kdm5c"
 
+install_version("ape", version = "5.3", repos = "http://cran.us.r-project.org")
 
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
 full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
@@ -586,17 +588,18 @@ meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 #gene_name <- "C11orf98"
 
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
+row.names(cts) <- gsub("\\..*","",row.names(cts))
 full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
+limma_genes <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv", stringsAsFactors = FALSE)
 
+test_genes <- limma_genes$X
+test_gene <- limma_genes$X[2]
+p_vals <- c()
 
-limma_de <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv", stringsAsFactors = FALSE)
-
-test_gene <- limma_de$X[2]
-
-#for (test_gene in test_genes){
-# run PGLS 
-
+for (test_gene in test_genes){
+  
 gene_ct <- t(subset(cts, rownames(cts) == test_gene))
+
 gene_ct <- merge(gene_ct,meta, by = 0)
 gene_ct$Species_condition <- paste(gene_ct$Species, gene_ct$condition, sep = ":")
 colnames(gene_ct)[2] <- "gene"
@@ -615,33 +618,43 @@ tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
 
 pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
     data = slopes, method = "ML")
-anova(pglsModel)
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
 
 #boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
 #boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
 #boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
 
 
-gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
-p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) +
-  geom_point()+
-    theme_minimal()+
-    ylab("log2 normalized counts\n")+
-    xlab("\ncondition")+
-    scale_fill_manual(values=c(blu,red))+
-    scale_color_manual(values = c(rep("black",28)))+
-    #ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
-    facet_wrap(~clade + Species, ncol = 14)+
-    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
-    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
-    theme(axis.text.x = element_text(angle=90, hjust=1))+
-    theme(strip.text.x = element_text(size = 6))+
-    theme(legend.position = "none")
+# gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
+# p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) +
+#  geom_point()+
+#    theme_minimal()+
+#    ylab("log2 normalized counts\n")+
+#    xlab("\ncondition")+
+#    scale_fill_manual(values=c(blu,red))+
+#    scale_color_manual(values = c(rep("black",28)))+
+#    #ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+#    facet_wrap(~clade + Species, ncol = 14)+
+#    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+#    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+#    theme(axis.text.x = element_text(angle=90, hjust=1))+
+#    theme(strip.text.x = element_text(size = 6))+
+#    theme(legend.position = "none")
 
 #png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
-print(p1)
+#print(p1)
 #dev.off()
-#}
+}
+
+pgls_res <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig <- pgls_res[pgls_res$p < 0.05,]
+limma_sig <- limma_genes[limma_genes$adj.P.Val < 0.05,]
+
+
+
+plot(euler(list(limma_sig=limma_sig$X,
+                pgls_sig=pgls_sig$gene)),quantities = TRUE, labels = c("",""))
 
 ```
 
