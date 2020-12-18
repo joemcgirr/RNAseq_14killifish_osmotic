@@ -591,9 +591,9 @@ full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osm
 
 limma_de <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv", stringsAsFactors = FALSE)
 
-test_genes <- limma_de$X[2]
+test_gene <- limma_de$X[2]
 
-for (test_gene in test_genes){
+#for (test_gene in test_genes){
 # run PGLS 
 
 gene_ct <- t(subset(cts, rownames(cts) == test_gene))
@@ -615,7 +615,7 @@ tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
 
 pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
     data = slopes, method = "ML")
-print(anova(pglsModel))
+anova(pglsModel)
 
 #boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
 #boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
@@ -641,7 +641,7 @@ p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) 
 #png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
 print(p1)
 #dev.off()
-}
+#}
 
 ```
 
