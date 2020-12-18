@@ -527,7 +527,10 @@ boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", ma
 ## condition
 use slopes to comapre same species between conditions
 
+gls(slope~physiology)
+
 ```{r}
+library(purrr)
 
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
@@ -547,23 +550,33 @@ meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 
 ####  choose gene to test
 # significant for transfer/acclimation
-gene <- c("ENSFHEP00000008393")
-gene_name <- c("cftr")
+#gene <- c("ENSFHEP00000008393")
+#gene_name <- c("cftr")
 # significant for physiology (Lisa Fig 11)
 #gene <- c("ENSFHEP00000001090")
 #gene_name <- "slc35a3a"
+# top significant for transfer
+#gene <- c("ENSFHEP00000031307")
+#gene_name <- "bcl6ab"
 # top significant for physiology 
 #gene <- c("ENSFHEP00000019927")
 #gene_name <- "kdm5c"
-
+# top transfer x physiology 
+gene <- c("ENSFHEP00000010294")
+gene_name <- "C11orf98"
 
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
 full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
 
-library(purrr)
 
+limma_de <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv", stringsAsFactors = FALSE)
+
+test_genes <- limma_de$X[1:5]
+
+for (test_gene in test_genes){
 # run PGLS 
-gene_ct <- t(subset(cts, rownames(cts) == gene))
+
+gene_ct <- t(subset(cts, rownames(cts) == test_gene))
 gene_ct <- merge(gene_ct,meta, by = 0)
 gene_ct$Species_condition <- paste(gene_ct$Species, gene_ct$condition, sep = ":")
 colnames(gene_ct)[2] <- "gene"
@@ -582,12 +595,33 @@ tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
 
 pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
     data = slopes, method = "ML")
-anova(pglsModel)
+print(anova(pglsModel))
 
 boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
 boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
 boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
 
+
+gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
+p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    #ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + Species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+}
 
 ```
 
