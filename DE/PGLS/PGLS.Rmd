@@ -1,5 +1,5 @@
 ---
-title: "Exploring PGLS for Kilifish expression"
+title: "Exploring PGLS for Killifish expression"
 author: "Joe McGirr"
 date: '`r Sys.Date()`'
 output:
@@ -54,6 +54,7 @@ packages(emmeans)
 packages(data.table)
 packages(ggpubr)
 
+library(purrr)
 library(ape)
 library(geiger)
 library(nlme)
@@ -80,7 +81,7 @@ gry<-  '#BBBBBB'
 
 For each `condition_physiology_clade` group (regardless of species), each sample must have a minimum count of 10, and a group minimum total count of 30.
 
-```{r loadfiles, results='hide', include=FALSE, warning=FALSE}
+```{r, results='hide', include=FALSE, warning=FALSE, eval = FALSE}
 
 # section 5.3 for normalizing for library size
 #https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html#normalising-gene-expression-distributions
@@ -271,7 +272,7 @@ meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
 
 ### determine appropriate constant
 
-```{r, results = 'hide'}
+```{r, results = 'hide', eval = FALSE}
 
 
 js <- c(1,2,5,10)
@@ -377,6 +378,26 @@ head(trans)
 ###Visualize mean-standard deviation relationship after normalization: 
 
 ```{r}
+constant <- 0.35243
+
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+
+
+trans<- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
 
 
 mean_counts <- colMeans(trans)
@@ -464,7 +485,7 @@ lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
 
 gls(counts~physiology)
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
@@ -524,13 +545,12 @@ boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", ma
 
 ```
 
-## condition
-use slopes to comapre same species between conditions
+## condition x physiology
+use slopes to compare same species between conditions
 
 gls(slope~physiology)
 
-```{r}
-library(purrr)
+```{r, message=FALSE, warning=FALSE}
 
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
@@ -562,8 +582,8 @@ meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 #gene <- c("ENSFHEP00000019927")
 #gene_name <- "kdm5c"
 # top transfer x physiology 
-gene <- c("ENSFHEP00000010294")
-gene_name <- "C11orf98"
+#gene <- c("ENSFHEP00000010294")
+#gene_name <- "C11orf98"
 
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
 full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
@@ -571,7 +591,7 @@ full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osm
 
 limma_de <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/transfer_physiology_interaction.csv", stringsAsFactors = FALSE)
 
-test_genes <- limma_de$X[1:5]
+test_genes <- limma_de$X[2]
 
 for (test_gene in test_genes){
 # run PGLS 
@@ -597,9 +617,9 @@ pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
     data = slopes, method = "ML")
 print(anova(pglsModel))
 
-boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
-boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
-boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+#boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
+#boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
 
 
 gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
@@ -626,7 +646,7 @@ print(p1)
 ```
 
 
-#### plots
+
 ```{r, eval = FALSE, include=FALSE}
 
 # plot specific genes by name
