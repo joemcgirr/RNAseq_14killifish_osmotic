@@ -54,11 +54,15 @@ packages(emmeans)
 packages(data.table)
 packages(ggpubr)
 
+#install_version("ape", version = "5.3", repos = "http://cran.us.r-project.org")
+
 library(eulerr)
 library(purrr)
 library(ape)
 library(geiger)
 library(nlme)
+library(UpSetR)
+
 
 # color-blind friendly 
 # Wong, B. Points of view: Color blindness. Nat Methods (2011).
@@ -95,14 +99,6 @@ counts_design <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_
 # I removed the same samples from species with low numbers of replicates (*F. zebrinus*, *F. nottii*, *F. sciadicus*).  
 
 
-#dim(counts_design)
-
-# -----------------------
-# Determine which columns to drop
-# based on sample size
-# Drop columns with no data
-# -----------------------
-
 #length(counts_design)
 samps <- as.data.frame(colnames(counts_design)[3:length(counts_design)])
 samps <- samps %>% separate(`colnames(counts_design)[3:length(counts_design)]`, , into = c("species", "genus", "treatment","replicate"), sep = "_")
@@ -114,50 +110,72 @@ samps_t <- samps %>% filter(treatment == "transfer")
 samps_b <- samps %>% filter(treatment == "BW")
 samps_f <- samps %>% filter(treatment == "FW")
 
-#length(unique(paste(samps_t$species,samps_t$genus, samps_t$treatment)))
-#length(unique(paste(samps_b$species,samps_b$genus, samps_b$treatment)))
-#length(unique(paste(samps_f$species,samps_f$genus, samps_f$treatment)))
-#setdiff(unique(paste(samps_f$species,samps_f$genus)),
-#        unique(paste(samps_t$species,samps_t$genus)))
-
 design <- counts_design[counts_design$Ensembl == 'Empty',]
-#design$type <- c("species","native_salinity","clade","group","condition")
+
+
+#choose experiment
+
+# -----------------------
+# transfer experiment
+# -----------------------
 
 # dropping all zebrinus, nottii, sciadicus, due to sample size
+# drops <- c("X","Ensembl",
+#            "F_zebrinus_BW_1.quant","F_zebrinus_BW_2.quant",
+#            "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
+#            "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
+#            "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant",
+#            "F_sciadicus_FW_2.quant","F_sciadicus_transfer_1.quant")
+# 
+# bw_drops <- grep('_BW_', colnames(counts_design), value=TRUE)
+# 
+# counts<-counts_design[!counts_design$Ensembl == 'Empty',]
+# rownames(counts)<-counts$Ensembl
+# design <- design[ , !(names(design) %in% drops)]
+# counts <- counts[ , !(names(counts) %in% drops)]
+# design <- design[ , !(names(design) %in% bw_drops)]
+# counts <- counts[ , !(names(counts) %in% bw_drops)]
+
+
+
+# -----------------------
+# acclimation experiment
+# -----------------------
+
 drops <- c("X","Ensembl",
            "F_zebrinus_BW_1.quant","F_zebrinus_BW_2.quant",
            "F_zebrinus_FW_1.quant","F_zebrinus_FW_2.quant",
            "F_nottii_FW_1.quant","F_nottii_FW_2.quant",
-           "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant",
-           "F_sciadicus_FW_2.quant","F_sciadicus_transfer_1.quant")
+           "F_sciadicus_BW_1.quant","F_sciadicus_FW_1.quant","F_sciadicus_FW_2.quant")
 
-bw_drops <- grep('_BW_', colnames(counts_design), value=TRUE)
-
+transfer_drops <- c("F_sciadicus_transfer_1.quant","F_rathbuni_transfer_1.quant","F_rathbuni_transfer_2.quant","F_rathbuni_transfer_3.quant",
+                     "F_grandis_transfer_1.quant","F_grandis_transfer_2.quant","F_grandis_transfer_3.quant",
+                     "F_notatus_transfer_1.quant","F_notatus_transfer_2.quant","F_notatus_transfer_3.quant",
+                     "F_parvapinis_transfer_1.quant","F_parvapinis_transfer_2.quant",
+                     "L_goodei_transfer_1.quant","L_goodei_transfer_2.quant","L_goodei_transfer_3.quant",
+                     "F_olivaceous_transfer_1.quant","F_olivaceous_transfer_2.quant",
+                     "L_parva_transfer_1.quant","L_parva_transfer_2.quant","L_parva_transfer_3.quant",
+                     "F_heteroclitusMDPP_transfer_1.quant","F_heteroclitusMDPP_transfer_2.quant","F_heteroclitusMDPP_transfer_3.quant",
+                     "F_similis_transfer_1.quant","F_similis_transfer_2.quant","F_similis_transfer_3.quant",
+                     "F_diaphanus_transfer_1.quant","F_diaphanus_transfer_2.quant",
+                     "F_chrysotus_transfer_1.quant","F_chrysotus_transfer_2.quant",
+                     "A_xenica_transfer_1.quant","A_xenica_transfer_2.quant","A_xenica_transfer_3.quant" ,
+                     "F_catanatus_transfer_1.quant","F_catanatus_transfer_2.quant",
+                     "F_heteroclitusMDPL_transfer_1.quant","F_heteroclitusMDPL_transfer_2.quant","F_heteroclitusMDPL_transfer_3.quant")
 counts<-counts_design[!counts_design$Ensembl == 'Empty',]
 rownames(counts)<-counts$Ensembl
 design <- design[ , !(names(design) %in% drops)]
 counts <- counts[ , !(names(counts) %in% drops)]
-design <- design[ , !(names(design) %in% bw_drops)]
-counts <- counts[ , !(names(counts) %in% bw_drops)]
-#print("dim design")
-#dim(design)
-#print("dim counts")
-#dim(counts)
+design <- design[ , !(names(design) %in% transfer_drops)]
+counts <- counts[ , !(names(counts) %in% transfer_drops)]
+
+
+
+
+# continue
+
 gene.names<-rownames(counts)
 design[] <- lapply( design, factor)
-
-
-
-## Sample Design Matrix
-
-#Same model with fixed effects, but condition = transfer: 
-
-# ~physiology*condition*clade
-
-
-# --------------------
-# design categories
-# --------------------
 
 species<-as.character(unlist(design[1,]))
 physiology<-as.character(unlist(design[2,]))
@@ -192,8 +210,6 @@ physiology <- ExpDesign$physiology
 
 ## Filtering and Normalization
 
-# I kept all of this the same  
-
 
 #Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
 
@@ -211,7 +227,7 @@ lcom_unfilt<-log2(counts+1)
 keep<-filterByExpr(counts,design = design,group=condition_physiology_clade,min.count = 10, min.total.count = 30)
 counts.filt <- counts[keep,]
 #print("filtered_counts")
-#dim(counts.filt)
+dim(counts.filt)
 #write.table(counts.filt,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_transfer/exp.tsv",sep="\t",quote=FALSE)
 
 
@@ -257,7 +273,8 @@ lib_norm_counts <- cpm
 
 #head(lib_norm_counts)
 
-meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign.txt",stringsAsFactors = FALSE, header = TRUE)
+# CHOOSE Experiment
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
 meta <- meta[,-5]
 meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
@@ -277,9 +294,13 @@ meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
 
 
 js <- c(1,2,5,10)
-#js <- c(0.001,0.01,0.1,0.5)
-#js <- seq(from = 0.3524, to = 0.3525, by = 0.00001)
-js <- c(0.35243)
+js <- c(0.001,0.01,0.1,0.5)
+js <- seq(from = 0.399921, to = 0.4001, by = 0.00001)
+
+#best for transfer
+#js <- c(0.35243)
+#best for acclimation
+#js <- c(0.39992)
 
 slopes <- c()
 
@@ -361,28 +382,33 @@ slopes <- c(slopes, slope[[1]])
 }
 #slopes
 df <- data.frame(slopes,js)
-df
+#df
 df[which(abs(df$slopes) == min(abs(df$slopes))),]
 
-
+#best for transfer
 constant <- 0.35243
 # slope = -1.273828e-06
+#best for acclimation
+constant <- 0.39992
+# slope -1.838383e-06
 
 trans <- log2(lib_norm_counts+constant)
 head(trans)
-#write.table(trans, "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt")
+#write.table(trans, "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_acclimation_constant0.39992.txt")
 
 
 
 ```
 
-###Visualize mean-standard deviation relationship after normalization: 
+### Visualize mean-standard deviation relationship after normalization: 
 
 ```{r}
-constant <- 0.35243
+constant <- 0.39992
 
 
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
+
 rownames(meta) <- meta$sample
 meta <- meta[,-5]
 meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
@@ -398,7 +424,7 @@ meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
 meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 
 
-trans<- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
+trans<- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_acclimation_constant0.39992.txt", stringsAsFactors = FALSE)
 
 
 mean_counts <- colMeans(trans)
@@ -469,7 +495,7 @@ sd <- as.vector(mv$stdev)
 slope <- (coef(lm(sd~mea))[2])
 
 
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_",j,".png",sep = ""),height = 4.5, width = 7, units = 'in', res = 600)
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/pgls/mean_var_acclimation.png",height = 4.5, width = 7, units = 'in', res = 600)
 plot(mea,sd,xlab = "mean",ylab = "variance", pch=16, cex=0.5,cex.main=.8, main=paste("Mean-Var relationship of Normalized Log(counts + ",constant,"), slope=",round(slope,4),sep = ""))
 abline(coef(lm(sd~mea)),col="red",lwd=3)
 lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
@@ -486,23 +512,16 @@ lines(lowess(mea,sd,f=0.2),col="blue",lwd=3)
 
 gls(counts~physiology)
 
-```{r, message=FALSE, warning=FALSE}
+In order to have 1:1 mapping species:tree_tip, I test FW_acclimation,BW_acclimation, and transfer separately. Counts are averaged across replicates. Genes showing significant DE between euryhaline and stenohaline groups after accounting for branch lengths in all three tests are shown in overlap with limma approach (significant physiology main effect).
 
-meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
-rownames(meta) <- meta$sample
-meta <- meta[,-5]
-meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
-meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
-meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
-meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
-meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
-names(meta)[names(meta) == "species"] <- "Species"
-# fix names to match tree
-meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
-meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
-meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
-meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
+full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
+
+limma_genes_FW_transfer <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/main_physiology.csv", stringsAsFactors = FALSE)
+limma_genes_FW_BW <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/main_physiology.csv", stringsAsFactors = FALSE)
+limma_sig_FW_transfer <- limma_genes_FW_transfer[limma_genes_FW_transfer$adj.P.Val < 0.05,]
+limma_sig_FW_BW <- limma_genes_FW_BW[limma_genes_FW_BW$adj.P.Val < 0.05,]
 
 ####  choose gene to test
 # cftr (significant for transfer/acclimation)
@@ -511,22 +530,52 @@ meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
 #gene <- c("ENSFHEP00000001090")
 #gene_name <- "slc35a3a"
 # top significant for physiology 
-gene <- c("ENSFHEP00000019927")
-gene_name <- "kdm5c"
+#gene <- c("ENSFHEP00000019927")
+#gene_name <- "kdm5c"
 
-install_version("ape", version = "5.3", repos = "http://cran.us.r-project.org")
+```
+
+### FW (using FW vs. transfer normalized counts)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+# combine heteroclitus subpopulations
+meta$Species <- gsub("F_heteroclitusMDPP","F_heteroclitus",meta$Species)
+meta$Species <- gsub("F_heteroclitusMDPL","F_heteroclitus",meta$Species)
+
 
 cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
-full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
+#cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_acclimation_constant0.39992.txt", stringsAsFactors = FALSE)
+row.names(cts) <- gsub("\\..*","",row.names(cts))
 
-# choose physiology
 keeps <- grep('_FW_', colnames(cts), value=TRUE)
-#keeps <- grep('_BW_', colnames(cts), value=TRUE)
-#keeps <- grep('_transfer_', colnames(cts), value=TRUE)
+cts_condition <- cts[ , (names(cts) %in% keeps)]
+
+test_genes <- limma_genes_FW_transfer$X
+#test_gene <- limma_genes$X[3]
+#test_gene <- "ENSFHEP00000018189"
+p_vals <- c()
+
+for (test_gene in test_genes){
+ 
 
 # run PGLS 
-cts_condition <- cts[ , (names(cts) %in% keeps)]
-gene_ct <- t(subset(cts_condition, rownames(cts_condition) == gene))
+gene_ct <- t(subset(cts_condition, rownames(cts_condition) == test_gene))
 gene_ct <- merge(gene_ct,meta, by = 0)
 sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
 sp_means$tree_tip <- sp_means$Group.1
@@ -534,25 +583,232 @@ row.names(sp_means) <- sp_means$tree_tip
 sp_means$Group.1 <- NULL
 names(sp_means) <- c("normalized_count", "Species")
 sp_means <- unique(merge(sp_means, meta[,2:4], by = c("Species")))
-sp_means <- sp_means[which(sp_means$Species != "F_heteroclitusMDPL" & sp_means$Species != "F_heteroclitusMDPP"),] 
+row.names(sp_means) <- sp_means$Species
 tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,sp_means$Species))
-
+  # make sure all counts !=0
+  if (length(unique(sp_means$normalized_count))<2){
+  p_vals <- c(p_vals,999)  
+  } else {
 
 pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = tree),
     data = sp_means, method = "ML")
-anova(pglsModel)
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
 
-boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+
+}
+}
+
+pgls_res_FW_transfer <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig_FW_transfer <- pgls_res_FW_transfer[pgls_res_FW_transfer$p < 0.05,]
+
+plot(euler(list(limma_sig=limma_sig_FW_transfer$X,
+                pgls_sig_FW_transfer=pgls_sig_FW_transfer$gene)),quantities = TRUE, labels = c("",""))
+```
+
+### transfer
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+keeps <- grep('_transfer_', colnames(cts), value=TRUE)
+cts_condition <- cts[ , (names(cts) %in% keeps)]
+
+test_genes <- limma_genes_FW_transfer$X
+p_vals <- c()
+
+for (test_gene in test_genes){
+ 
+
+# run PGLS 
+gene_ct <- t(subset(cts_condition, rownames(cts_condition) == test_gene))
+gene_ct <- merge(gene_ct,meta, by = 0)
+sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
+sp_means$tree_tip <- sp_means$Group.1
+row.names(sp_means) <- sp_means$tree_tip
+sp_means$Group.1 <- NULL
+names(sp_means) <- c("normalized_count", "Species")
+sp_means <- unique(merge(sp_means, meta[,2:4], by = c("Species")))
+row.names(sp_means) <- sp_means$Species
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,sp_means$Species))
+  # make sure all counts !=0
+  if (length(unique(sp_means$normalized_count))<2){
+  p_vals <- c(p_vals,999)  
+  } else {
+
+pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = tree),
+    data = sp_means, method = "ML")
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
+
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+
+}
+}
+
+pgls_res_transfer <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig_transfer <- pgls_res_transfer[pgls_res_transfer$p < 0.05,]
+
+plot(euler(list(limma_sig=limma_sig_FW_transfer$X,
+                pgls_sig_transfer=pgls_sig_transfer$gene)),quantities = TRUE, labels = c("",""))
 
 
 ```
 
+### FW (using FW vs. BW normalized counts)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
+
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+# combine heteroclitus subpopulations
+meta$Species <- gsub("F_heteroclitusMDPP","F_heteroclitus",meta$Species)
+meta$Species <- gsub("F_heteroclitusMDPL","F_heteroclitus",meta$Species)
+
+#cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_transfer_constant0.35243.txt", stringsAsFactors = FALSE)
+cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_acclimation_constant0.39992.txt", stringsAsFactors = FALSE)
+row.names(cts) <- gsub("\\..*","",row.names(cts))
+
+keeps <- grep('_FW_', colnames(cts), value=TRUE)
+cts_condition <- cts[ , (names(cts) %in% keeps)]
+
+test_genes <- limma_genes_FW_BW$X
+p_vals <- c()
+
+for (test_gene in test_genes){
+ 
+
+# run PGLS 
+gene_ct <- t(subset(cts_condition, rownames(cts_condition) == test_gene))
+gene_ct <- merge(gene_ct,meta, by = 0)
+sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
+sp_means$tree_tip <- sp_means$Group.1
+row.names(sp_means) <- sp_means$tree_tip
+sp_means$Group.1 <- NULL
+names(sp_means) <- c("normalized_count", "Species")
+sp_means <- unique(merge(sp_means, meta[,2:4], by = c("Species")))
+row.names(sp_means) <- sp_means$Species
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,sp_means$Species))
+  # make sure all counts !=0
+  if (length(unique(sp_means$normalized_count))<2){
+  p_vals <- c(p_vals,999)  
+  } else {
+
+pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = tree),
+    data = sp_means, method = "ML")
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
+
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+
+}
+}
+
+pgls_res_FW_BW <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig_FW_BW <- pgls_res_FW_BW[pgls_res_FW_BW$p < 0.05,]
+
+plot(euler(list(limma_sig=limma_sig_FW_BW$X,
+                pgls_sig_FW_BW=pgls_sig_FW_BW$gene)),quantities = TRUE, labels = c("",""))
+```
+
+### BW
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+keeps <- grep('_BW_', colnames(cts), value=TRUE)
+cts_condition <- cts[ , (names(cts) %in% keeps)]
+
+test_genes <- limma_genes_FW_BW$X
+p_vals <- c()
+
+for (test_gene in test_genes){
+ 
+
+# run PGLS 
+gene_ct <- t(subset(cts_condition, rownames(cts_condition) == test_gene))
+gene_ct <- merge(gene_ct,meta, by = 0)
+sp_means <- aggregate(gene_ct[,2], list(gene_ct$Species), mean)
+sp_means$tree_tip <- sp_means$Group.1
+row.names(sp_means) <- sp_means$tree_tip
+sp_means$Group.1 <- NULL
+names(sp_means) <- c("normalized_count", "Species")
+sp_means <- unique(merge(sp_means, meta[,2:4], by = c("Species")))
+row.names(sp_means) <- sp_means$Species
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,sp_means$Species))
+  # make sure all counts !=0
+  if (length(unique(sp_means$normalized_count))<2){
+  p_vals <- c(p_vals,999)  
+  } else {
+
+pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = tree),
+    data = sp_means, method = "ML")
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
+
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+
+}
+}
+
+pgls_res_BW <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig_BW <- pgls_res_BW[pgls_res_BW$p < 0.05,]
+
+plot(euler(list(limma_sig=limma_sig_FW_BW$X,
+                pgls_sig_BW=pgls_sig_BW$gene)),quantities = TRUE, labels = c("",""))
+
+
+
+```
+
+### all physiology UPSET
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+
+listInput <- list(limma_sig_FW_BW=limma_sig_FW_BW$X,
+                  limma_sig_FW_transfer=limma_sig_FW_transfer$X,
+                  pgls_sig_FW_BW=pgls_sig_FW_BW$gene,
+                  pgls_sig_FW_transfer=pgls_sig_FW_transfer$gene,
+                  pgls_sig_BW=pgls_sig_BW$gene,
+                  pgls_sig_transfer=pgls_sig_transfer$gene)
+names(listInput) <- c("limma acclimation", 
+                      "limma transfer",
+                      "PGLS FW BW",
+                      "PGLS FW transfer",
+                      "PGLS BW",
+                      "PGLS transfer")
+
+#png("C:/Users/jmcgirr/Documents/" , width = 12, height = 7, units = 'in', res = 600)
+upset(fromList(listInput), sets = rev(names(listInput)),order.by = "freq", 
+      point.size = 3.4, line.size = 1.2, 
+      mainbar.y.label = "genes intersecting", sets.x.label = "genes")
+      #nsets = 6,text.scale = c(2, 1.6, 1.5, 1.4, 2,1.6),keep.order = TRUE)
+#dev.off()
+
+#write.table(pgls_res,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/FW_main_physiology.txt",sep="\t",quote=FALSE, row.names = FALSE)
+
+```
+
 ## condition x physiology
-use slopes to compare same species between conditions
+In order to have 1:1 mapping species:tree_tip, I use slopes between means (the response to condition) to compare expression in a species between conditions.
 
 gls(slope~physiology)
 
-```{r, message=FALSE, warning=FALSE}
+### transfer experiment 
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
 meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
 rownames(meta) <- meta$sample
@@ -568,6 +824,9 @@ meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
 meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
 meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
 meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+# combine heteroclitus subpopulations
+meta$Species <- gsub("F_heteroclitusMDPP","F_heteroclitus",meta$Species)
+meta$Species <- gsub("F_heteroclitusMDPL","F_heteroclitus",meta$Species)
 
 
 ####  choose gene to test
@@ -612,7 +871,6 @@ slopes <- slopes[c("Species","slope")]
 slopes <- unique(merge(slopes, meta[,2:4], by = c("Species")))
 row.names(slopes) <- slopes$Species
 
-slopes <- slopes[which(slopes$Species != "F_heteroclitusMDPL" & slopes$Species != "F_heteroclitusMDPP"),] 
 tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
 
 
@@ -656,274 +914,79 @@ limma_sig <- limma_genes[limma_genes$adj.P.Val < 0.05,]
 plot(euler(list(limma_sig=limma_sig$X,
                 pgls_sig=pgls_sig$gene)),quantities = TRUE, labels = c("",""))
 
+#write.table(pgls_res,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/transfer_physiology_interaction.txt",sep="\t",quote=FALSE, row.names = FALSE)
+
 ```
 
+### acclimation experiment 
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+# combine heteroclitus subpopulations
+meta$Species <- gsub("F_heteroclitusMDPP","F_heteroclitus",meta$Species)
+meta$Species <- gsub("F_heteroclitusMDPL","F_heteroclitus",meta$Species)
 
 
-```{r, eval = FALSE, include=FALSE}
+cts <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/normalized_cts_acclimation_constant0.39992.txt", stringsAsFactors = FALSE)
+row.names(cts) <- gsub("\\..*","",row.names(cts))
+full_tree <- read.tree("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/fundulus_rodgers_2018.nwk")
+limma_genes <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/DE_results/salinity_physiology_interaction.csv", stringsAsFactors = FALSE)
 
-# plot specific genes by name
+test_genes <- limma_genes$X
+test_gene <- limma_genes$X[2]
+p_vals <- c()
 
-# transfer comps
-comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
-comp <- "main_physiology"
+for (test_gene in test_genes){
+  
+gene_ct <- t(subset(cts, rownames(cts) == test_gene))
 
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
-sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
-sig_genes <- sig_genes[sig_genes$gene_name == gene_name,]
+gene_ct <- merge(gene_ct,meta, by = 0)
+gene_ct$Species_condition <- paste(gene_ct$Species, gene_ct$condition, sep = ":")
+colnames(gene_ct)[2] <- "gene"
+slopes <- gene_ct %>%
+  group_by(Species) %>% 
+  do(mod_lin = lm(gene~condition, data = .)) %>% 
+  mutate(intercept = mod_lin$coefficients[1],
+         slope = mod_lin$coefficients[2]) %>% as.data.frame()
+slopes <- slopes[c("Species","slope")]
+slopes <- unique(merge(slopes, meta[,2:4], by = c("Species")))
+row.names(slopes) <- slopes$Species
 
-gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
-p1<-ggplot(gene_ct, aes(x=condition, y=gene, col = Species, fill = physiology)) +
-  geom_point()+
-    theme_minimal()+
-    ylab("log2 normalized counts\n")+
-    xlab("\ncondition")+
-    scale_fill_manual(values=c(blu,red))+
-    scale_color_manual(values = c(rep("black",28)))+
-    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
-    facet_wrap(~clade + Species, ncol = 14)+
-    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
-    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
-    theme(axis.text.x = element_text(angle=90, hjust=1))+
-    theme(strip.text.x = element_text(size = 6))+
-    theme(legend.position = "none")
-
-#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
-print(p1)
-#dev.off()
+tree<-drop.tip(full_tree, setdiff(full_tree$tip.label,slopes$Species))
 
 
+pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
+    data = slopes, method = "ML")
+an <- anova(pglsModel)
+p_vals <- c(p_vals,an$`p-value`[2])
 
 
-
-
-
-
-
-## PGLS phylogenetic least squares ##https://www.r-phylo.org/wiki/HowTo/PGLS
-#library(evolqg)
-library(ape)
-library(geiger)
-library(nlme)
-#library(phytools)
-##install.packages("phangorn")
-#library(phangorn)
-#library(adephylo)
-#install.packages("adephylo")
-
-## DE
-all_48 <- read.table("D:/Martin Lab/all_2018_samples/mse_v_distance/de_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_8 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/de_v_crpa_8dpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-row.names(all_48) <- all_48$tree_tip
-row.names(all_8) <- all_8$tree_tip
-all_48_de <- all_48
-all_8_de <- all_8
-
-# ME
-all_48 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/mse_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_8 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/mse_v_crpa_8dpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-tree <- read.tree("D:/Martin Lab/rna_2018/raxml/second_try_dna/RAxML_bestTree.58_dna_no_missing")
-distances <- c(cophenetic(tree)["CAF1","CPF1"],cophenetic(tree)["CAF1","CMF1"],0,
-               cophenetic(tree)["CAF1","CUNP"],cophenetic(tree)["CAF1","NAF1"])
-all_48$distance_branch <- distances
-all_8$distance_branch <- distances
-row.names(all_48) <- all_48$tree_tip
-row.names(all_8) <- all_8$tree_tip
-all_48_me <- all_48
-all_8_me <- all_8
-
-all_48_de$prop_DE_vs_CRPA_scaled <- all_48_de$prop_DE_vs_CRPA *100
-all_8_de$prop_DE_vs_CRPA_scaled <- all_8_de$prop_DE_vs_CRPA *100
-all_48_me$prop_DE_vs_CRPA_scaled <- all_48_me$prop_DE_vs_CRPA *100
-all_8_me$prop_DE_vs_CRPA_scaled <- all_8_me$prop_DE_vs_CRPA *100
-
-## plot km on x axis
-{
-
-par(mfrow=c(2,2))
-
-comps <-read.table("C:/Users/jmcgirr/Documents/all_2018_samples/prop_DE_CRPA_crosses.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_48 <- comps[which(comps$stage == "48hpf"),]
-all_8 <- comps[which(comps$stage == "8dpf"),]
-points_pch <- c(21,21,21,21,1,1,1,1,1,21)
-sep_cols <- c("black","black",yel,blu,"black","black","black","black","black", red)
-
-#tiff("C:/Users/jmcgirr/Documents/all_2018_samples/manuscript_figs/de_me_48_8_shapes.tiff", width = 5, height = 5, units = 'in', res = 1000)
-par(mfrow=c(2,2))
-par(mai=c(0.2,0.4,0.2,0))
-
-plot(jitter(all_48$distance_km,50), all_48$prop_DE*100,col = "black",pch = points_pch,bg = sep_cols,
-     cex = 2.3, ylim = c(0,31),xlab = "", ylab = "",xaxt ="n",cex.axis=1.5, yaxt = "n", xlim = c(-50,1200))
-axis(side=2, at=c(0,10,20,30), labels = TRUE, cex.axis= 1.3)
-pglsModel <- gls(prop_DE_vs_CRPA_scaled ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_48_de, method = "ML")
-#summary(pglsModel)
-abline(a = coef(pglsModel)[1], b = coef(pglsModel)[2], lty = 3)
-
-par(mai=c(0.2,0.2,0.2,0.2))
-plot(jitter(all_8$distance_km,50), all_8$prop_DE*100,col = "black",pch = points_pch,bg = sep_cols,
-     cex = 2.3, ylim = c(0,31),xlab = "", ylab = "",xaxt ="n",cex.axis=1.5, yaxt = "n", xlim = c(-50,1200))
-pglsModel <- gls(prop_DE_vs_CRPA_scaled ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_8_de, method = "ML")
-#summary(pglsModel)
-#abline(a = coef(pglsModel)[1], b = coef(pglsModel)[2], lty = 3)
-
-comps <-read.table("C:/Users/jmcgirr/Documents/all_2018_samples/prop_ME_CRPA_crosses.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-head(comps)
-all_48 <- comps[which(comps$stage == "48hpf"),]
-all_8 <- comps[which(comps$stage == "8dpf"),]
-sep_cols <- c("grey","grey",gre,grb,"grey","grey","grey","grey","grey", lir)
-
-par(mai=c(0.4,0.4,0,0))
-plot(jitter(all_48$distance_km,50), all_48$prop_DE*100,col = "black",pch = points_pch,bg = sep_cols,
-     cex = 2.3, ylim = c(0,31),xlab = "", ylab = "",cex.axis=1.5, yaxt = "n", xlim = c(-50,1200), xaxt = "n")
-axis(side=2, at=c(0,10,20,30), labels = TRUE, cex.axis= 1.3)
-axis(side=1, at=c(0,250,500,750,1000), labels = c(0,250,500,750,1000), cex.axis= 1)
-
-pglsModel <- gls(prop_DE_vs_CRPA_scaled ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_48_me, method = "ML")
-#summary(pglsModel)
-#abline(a = coef(pglsModel)[1], b = coef(pglsModel)[2], lty = 3)
-
-par(mai=c(0.4,0.2,0,0.2))
-plot(jitter(all_8$distance_km,50), all_8$prop_DE*100,col = "black",pch = points_pch,bg = sep_cols,
-     cex = 2.3, ylim = c(0,31),xlab = "", ylab = "",cex.axis=1.5, yaxt = "n", xlim = c(-50,1200), xaxt = "n")
-axis(side=1, at=c(0,250,500,750,1000), labels = c(0,250,500,750,1000), cex.axis= 1)
-pglsModel <- gls(prop_DE_vs_CRPA_scaled ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_8_me, method = "ML")
-#summary(pglsModel)
-#abline(a = coef(pglsModel)[1], b = coef(pglsModel)[2], lty = 3)
-#dev.off()
 }
 
+pgls_res <- data.frame(gene = test_genes,p = p_vals)
+pgls_sig <- pgls_res[pgls_res$p < 0.05,]
+limma_sig <- limma_genes[limma_genes$adj.P.Val < 0.05,]
 
 
 
+plot(euler(list(limma_sig=limma_sig$X,
+                pgls_sig=pgls_sig$gene)),quantities = TRUE, labels = c("",""))
 
-generalists_48 <- comps[which(comps$stage == "48hpf" & comps$specialist == "n"),]
-generalists_8 <- comps[which(comps$stage == "8dpf" & comps$specialist == "n"),]
-
-plot(comps$distance_km, comps$prop_DE)
-plot(comps$distance_branchlength, comps$prop_DE)
-
-#plot(generalists_48$distance_km, generalists_48$prop_DE)
-plot(all_48$distance_km, all_48$prop_DE)
-#plot(generalists_8$distance_km, generalists_8$prop_DE)
-plot(all_8$distance_km, all_8$prop_DE)
-
-
-#plot(generalists_48$distance_branchlength, generalists_48$prop_DE)
-#tiff("C:/Users/jmcgirr/Documents/all_2018_samples/manuscript_figs/de_48.tiff", width = 4.5, height = 5, units = 'in', res = 1000)
-plot(jitter(all_48$distance_branchlength), jitter((all_48$prop_DE)*100),pch = c(21,24)[as.factor(all_48$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,21.5),xlim = c(-0.02,0.45),xlab = "", ylab = "",xaxt ="n",cex.axis=1.5)
-#dev.off()
-#plot(generalists_8$distance_branchlength, generalists_8$prop_DE)
-#tiff("C:/Users/jmcgirr/Documents/all_2018_samples/manuscript_figs/de_8.tiff", width = 4.5, height = 5, units = 'in', res = 1000)
-plot(jitter(all_8$distance_branchlength), jitter((all_8$prop_DE)*100),pch = c(21,24)[as.factor(all_8$point_shape)],
-     bg =sep_cols,col = "black", cex = 2.3, ylim = c(0,21.5),xlim = c(-0.02,0.45),xlab = "", ylab = "", yaxt = "n",xaxt ="n")
-#dev.off()
-
-
-
-## PGLS phylogenetic least squares ##https://www.r-phylo.org/wiki/HowTo/PGLS
-# ME
-all_48 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/mse_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_8 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/mse_v_crpa_8dpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-tree <- read.tree("D:/Martin Lab/rna_2018/raxml/second_try_dna/RAxML_bestTree.58_dna_no_missing")
-distances <- c(cophenetic(tree)["CAF1","CPF1"],cophenetic(tree)["CAF1","CMF1"],0,
-               cophenetic(tree)["CAF1","CUNP"],cophenetic(tree)["CAF1","NAF1"])
-all_48$distance_branch <- distances
-all_8$distance_branch <- distances
-species<-c("CAF1",	"CMF1",	"CPF1",	"CUNP",	"NAF1")
-all_tree<-drop.tip(tree,tree$tip.label[-match(species, tree$tip.label)])
-species<-c("CAF1",	"CUNP",	"NAF1")
-generalist_tree<-drop.tip(tree,tree$tip.label[-match(species, tree$tip.label)])
-generalists_48 <- all_48[which(all_48$specialist == "n"),]
-generalists_8 <- all_8[which(all_8$specialist == "n"),]
-test<-c("CAF1",	"CUNP",	"NAF1")
-row.names(all_48) <- all_48$tree_tip
-row.names(all_8) <- all_8$tree_tip
-row.names(generalists_48) <- test
-row.names(generalists_8) <- test
-all_48 <- all_48_me
-all_8 <- all_8_me
-
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = generalist_tree),
-                 data = generalists_48, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = generalist_tree),
-                 data = generalists_8, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_48, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_8, method = "ML")
-summary(pglsModel)
-
-## DE
-all_48 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/de_v_crpa_48hpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-all_8 <- read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/de_v_crpa_8dpf.txt", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
-generalists_48 <- all_48[which(all_48$specialist == "n"),]
-generalists_8 <- all_8[which(all_8$specialist == "n"),]
-row.names(all_48) <- all_48$tree_tip
-row.names(all_8) <- all_8$tree_tip
-test<-c("NAF1",	"CUNP",	"CAF1")
-row.names(generalists_48) <- test
-row.names(generalists_8) <- test
-all_48 <- all_48_me
-all_8 <- all_8_me
-
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = generalist_tree),
-                 data = generalists_48, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = generalist_tree),
-                 data = generalists_8, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_48, method = "ML")
-summary(pglsModel)
-pglsModel <- gls(prop_DE_vs_CRPA ~ distance_km, correlation = corBrownian(phy = all_tree),
-                 data = all_8, method = "ML")
-summary(pglsModel)
-
-#plot tree 
-species<-c("CAF1",	"CMF1",	"CPF1",	"CUNP",	"NAF1", "ETAA1","OAF1","OMF1","OPF1")
-map_tree<-drop.tip(tree,tree$tip.label[-match(species, tree$tip.label)])
-map_tree<-rotate(map_tree,15)
-nodelabels()
-#tiff("D:/Martin Lab/rna_2018/raxml/map_tree_cp_and_op.tiff", width = 4.5, height = 4.5, units = 'in', res = 1000)
-#png("D:/Martin Lab/rna_2018/raxml/map_tree_cp_and_op.png", width = 5, height = 4.5, units = 'in', res = 1000,bg = "transparent")
-plotTree(map_tree,offset=1,direction = "leftwards")
-nodelabels(c("",100,100,100,100,100,100,100),frame="none",adj=c(1.2,0),cex = 0.4 )
-add.scale.bar(0.6,7)
-#dev.off()
-
-#png("D:/Martin Lab/rna_2018/raxml/map_tree_cp_and_op.png", width = 6, height = 10, units = 'in', res = 1000,bg = "transparent")
-plotTree(tree,offset=1)
-#dev.off()
-
-
-
-# phylogenetic mantel test 
-tree <- read.tree("D:/Martin Lab/rna_2018/raxml/second_try_dna/RAxML_bestTree.58_dna_no_missing")
-distance_km <-as.matrix(read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/distance_km_matrix.txt" ,header = TRUE,row.names=1))
-mis_48 <-as.matrix(read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/misexpression_48hpf_matrix.txt" ,header = TRUE,row.names=1))
-mis_8 <-as.matrix(read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/misexpression_8dpf_matrix.txt" ,header = TRUE,row.names=1))
-#mis_48 <-as.matrix(read.table("C:/Users/jmcgirr/Documents/all_2018_samples/mse_v_distance/na_rm_test_matrix.txt" ,header = TRUE,row.names=1))
-
-MyTree <- read.tree("D:/Martin Lab/rna_2018/raxml/second_try_dna/RAxML_bestTree.58_dna_no_missing")
-head(MyTree)
-
-tree = MyTree
-species<-c("CAF1",	"CMF1",	"CPF1",	"CUNP",	"NAF1")
-tree<-drop.tip(tree,tree$tip.label[-match(species, tree$tip.label)])
-
-PhyloMantel(tree, mis_48, distance_km, k = 10000)
-MantelCor(mis_48, distance_km)
-## End(Not run)
-
-
-#####
+#write.table(pgls_res,"C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/salinity_physiology_interaction.txt",sep="\t",quote=FALSE, row.names = FALSE)
 
 ```
+
+
