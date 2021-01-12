@@ -567,7 +567,7 @@ keeps <- grep('_FW_', colnames(cts), value=TRUE)
 cts_condition <- cts[ , (names(cts) %in% keeps)]
 
 test_genes <- limma_genes_FW_transfer$X
-#test_gene <- limma_genes$X[3]
+test_gene <- limma_genes_FW_transfer$X[3]
 #test_gene <- "ENSFHEP00000018189"
 p_vals <- c()
 
@@ -595,7 +595,7 @@ pglsModel <- gls(normalized_count ~ physiology, correlation = corBrownian(phy = 
 an <- anova(pglsModel)
 p_vals <- c(p_vals,an$`p-value`[2])
 
-#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "")
 
 }
 }
@@ -879,9 +879,10 @@ pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
 an <- anova(pglsModel)
 p_vals <- c(p_vals,an$`p-value`[2])
 
-#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "", main = gene_name)
+#boxplot(gene_ct[,2]~gene_ct$physiology, ylab = "normalized count", xlab = "")
 #boxplot(gene_ct[,2]~gene_ct$condition, ylab = "normalized count", xlab = "", main = gene_name)
-#boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "", main = gene_name)
+#boxplot(slopes$slope~slopes$physiology, ylab = "slope", xlab = "")
+#, main = gene_name)
 
 
 # gene_ct$Species <- factor(gene_ct$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
