@@ -255,7 +255,7 @@ boxplot(log(counts.filt+1), las = 2, main = "")
 genes = DGEList(count = counts.filt, group = condition_physiology_clade)
 genes = calcNormFactors(genes)
 
-# write normalized counts
+# write counts per million normalized counts
 tmp <- as.data.frame(cpm(genes))
 tmp$Ensembl <- rownames(tmp)
 tmp <- dplyr::select(tmp, Ensembl, everything())
@@ -557,6 +557,8 @@ dim(sig_main_salinity)
 #[1] 3228   10
 
 ```
+
+
 
 ## summary table
 ```{r filt, results="show",warning=FALSE}

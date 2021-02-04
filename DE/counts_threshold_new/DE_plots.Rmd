@@ -452,7 +452,83 @@ plot(euler(list(threeway_a=threeway_a$ensembl_transcript_id,
 #dev.off()
 
 
+```
 
+
+# Heatmaps
+```{r, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7,class.source = 'fold-show'}
+
+
+#https://jcoliver.github.io/learn-r/009-expression-heatmaps.html
+
+# norm_counts are counts per million normalized by library size from genes$samples$norm.factors
+# heatmap dataframe (hm) log2 normalizes and then normalizes relative to mean of respective clade.
+
+norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_transfer.txt",stringsAsFactors = FALSE, header = TRUE)
+
+norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_BW/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+meta <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_BW.txt",stringsAsFactors = FALSE, header = TRUE)
+
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+
+
+
+hm <- t(head(norm_counts))
+hm <- merge(meta, hm, by = "row.names")
+hm$species_condition <- paste(hm$Species, hm$condition, sep = ";")
+hm <- aggregate(hm[,6:(length(hm)-1)], list(hm$species_condition), mean)
+fw <- hm[grep("0.2_ppt", hm$Group.1),]
+other <- hm[-grep("0.2_ppt", hm$Group.1),]
+species_names <- unlist(strsplit(fw$Group.1,";"))[!grepl('0.2_ppt',unlist(strsplit(fw$Group.1,";")))]
+fw$Group.1 <- NULL
+other$Group.1 <- NULL
+hm <- log2((other+0.0001)/(fw+0.0001))
+hm$Species <- species_names
+meta1 <- meta
+rownames(meta1) <- NULL
+hm <- merge(unique(meta1[,2:4]), hm, by = "Species")
+
+## z-score: scale by clade?
+# c1 <- hm[grep("clade 1", hm$clade),]
+# scale(c1[,-c(1:3)])[1]
+
+# z-score: scale by row
+hm_info <- hm[,c(1:3)]
+scaled <- as.data.frame(scale(hm[,-c(1:3)]))
+
+
+exp.long <- pivot_longer(data = hm, 
+                         cols = -c(Species,physiology,clade),
+                         names_to = "gene", 
+                         values_to = "expression")
+
+exp.heatmap <- ggplot(data = exp.long, mapping = aes(x = Species,
+                                                     y = gene,
+                                                     fill = expression))+
+  geom_tile()
+
+exp.heatmap
 
 
 ```
+
+
+
+#### Fold Change
+Fold change is a measure describing how much a quantity changes going from an initial to a final value. For example, an initial value of 30 and a final value of 60 corresponds to a fold change of 2 (or equivalently, a change to 2 times), or in common terms, a one-fold increase. Fold change is calculated simply as the ratio of the difference between final value and the initial value over the original value. Thus, if the initial value is A and final value is B, the fold change is (B - A)/A or equivalently B/A - 1. As another example, a change from 80 to 20 would be a fold change of -0.75, while a change from 20 to 80 would be a fold change of 3 (a change of 3 to 4 times the original).
+Fold change is often used in analysis of gene expression data in micro array and RNA-Seq experiments, for measuring change in the expression level of a gene.[6] A disadvantage to and serious risk of using fold change in this setting is that it is biased [7] and may miss deferentially expressed genes with large differences (B-A) but small ratios (A/B), leading to a high miss rate at high intensities.
+Let's say there are 50 read counts in control and 100 read counts in treatment for gene A. This means gene A is expressing twice in treatment as compared to control (100 divided by 50 =2) or fold change is 2. This works well for over expressed genes as the number directly corresponds to how many times a gene is over-expressed. But when it is other way round (i.e, treatment 50, control 100), the value of fold change will be 0.5 (all under expressed genes will have values between 0 to 1, while over expressed genes will have values from 1 to infinity). To make this leveled, we use log2 for expressing the fold change. I.e, log2 of 2 is 1 and log2 of 0.5 is -1.
+
