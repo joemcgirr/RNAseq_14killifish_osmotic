@@ -991,3 +991,324 @@ plot(euler(list(limma_sig=limma_sig$X,
 ```
 
 
+
+
+
+
+
+
+
+
+# Compare genes called differentially expressed by limma, PGLS, and both
+
+##### load functions
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+###### Fix original meta data file
+##################################
+# experiment = "BW" or "transfer"
+meta_out <- function(experiment){
+meta <- read.table(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+return(meta)
+}
+
+###### single gene in panels
+############################
+# gene_id = ensemble id (ENSFHEP*)
+# experiment = "BW" or "transfer"
+# comp = effect
+all_samples_single_gene <- function(gene_id,comp,experiment){
+
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_id),]
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
+sig_genes <- sig_genes[sig_genes$X == gene_id,]
+gene_name <- sig_genes$external_gene_name[1]
+
+if (nrow(sig_genes) == 0){
+  print("gene name not found!")
+} else {
+
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts[counts == Inf]<-0
+counts[is.na(counts)] <- 0
+
+counts$species <- factor(counts$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
+
+return(counts)
+
+}
+}
+
+######### Heatmap with multiple genes
+#####################################
+# gene_id = vector of ensemble ids (ENSFHEP*)
+# experiment = "BW" or "transfer"
+# comp = effect
+heatmap_data_munge <- function(gene_ids,experiment){
+
+# norm_counts are counts per million normalized by library size from genes$samples$norm.factors
+# heatmap dataframe (hm) log2 normalizes and then scales by row (across all samples).
+
+meta <- read.table(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_ids),]
+
+
+hm <- t(norm_counts)
+hm <- merge(meta, hm, by = "row.names")
+hm$species_condition <- paste(hm$Species, hm$condition, sep = ";")
+hm <- aggregate(hm[,6:(length(hm)-1)], list(hm$species_condition), mean)
+
+# set zero count threshold
+#hm <- hm[ rowSums(hm > 0) >= 10, ]
+#hm <- hm[,c(1:20)]
+
+fw <- hm[grep("0.2_ppt", hm$Group.1),]
+other <- hm[-grep("0.2_ppt", hm$Group.1),]
+species_names <- unlist(strsplit(fw$Group.1,";"))[!grepl('0.2_ppt',unlist(strsplit(fw$Group.1,";")))]
+fw$Group.1 <- NULL
+other$Group.1 <- NULL
+
+hm <- log2(other)-log2(fw)
+hm$Species <- species_names
+meta1 <- meta
+rownames(meta1) <- NULL
+hm <- merge(unique(meta1[,2:4]), hm, by = "Species")
+
+species_order <- c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis")
+
+hm_mat <- t(hm[,4:(length(hm))])
+colnames(hm_mat) <- hm$Species
+hm_mat <- hm_mat[,species_order]
+hm_mat[hm_mat == Inf] <- 0
+hm_mat[hm_mat == -Inf] <- 0
+hm_mat[is.na(hm_mat)] <- 0
+return(hm_mat)
+
+}
+heatmap_data_munge_strict_count_filt <- function(gene_ids,experiment){
+
+meta <- read.table(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_ids),]
+
+hm <- t(norm_counts)
+hm <- merge(meta, hm, by = "row.names")
+hm$species_condition <- paste(hm$Species, hm$condition, sep = ";")
+hm <- aggregate(hm[,6:(length(hm)-1)], list(hm$species_condition), mean)
+
+# set zero count threshold
+hm <- hm[ rowSums(hm > 0) >= 10, ]
+hm <- hm[,c(1:20)]
+
+fw <- hm[grep("0.2_ppt", hm$Group.1),]
+other <- hm[-grep("0.2_ppt", hm$Group.1),]
+species_names <- unlist(strsplit(fw$Group.1,";"))[!grepl('0.2_ppt',unlist(strsplit(fw$Group.1,";")))]
+fw$Group.1 <- NULL
+other$Group.1 <- NULL
+
+hm <- log2(other)-log2(fw)
+hm$Species <- species_names
+meta1 <- meta
+rownames(meta1) <- NULL
+hm <- merge(unique(meta1[,2:4]), hm, by = "Species")
+
+species_order <- c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis")
+
+hm_mat <- t(hm[,4:(length(hm))])
+colnames(hm_mat) <- hm$Species
+hm_mat <- hm_mat[,species_order]
+hm_mat[hm_mat == Inf] <- 0
+hm_mat[hm_mat == -Inf] <- 0
+hm_mat[is.na(hm_mat)] <- 0
+return(hm_mat)
+
+}
+
+```
+
+## significant main effect: condition
+
+### Example genes: ctfr and aqp3
+ctfr is significantly upregulated in all species transferred to BW after 24 hours and after 2 weeks. aqp3 is downregulated.
+
+These two plots show expression responses after 2 weeks in BW.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "main_salinity"
+gene_id <- c("ENSFHEP00000008393")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+gene_id <- c("ENSFHEP00000006725")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("aqp3\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+```
+
+
+### Top 50 genes showing significant BW response (2 weeks) using limma approach
+These genes show the same type of expression pattern as cftr and aqp3. 
+
+Significance determined from F tests from ANOVA table: significant (adjusted p-value <0.05) for main effect of salinity but not significant for salinity x physiology and not significant for salinity x physiology x clade interactions.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+# transfer comps
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+# BW comps
+comps <- c("clade_physiology_interaction","salinity_physiology_interaction","salinity_clade_interaction","threeway","main_clade","main_physiology","main_salinity")
+
+experiment <- "BW"
+comp <- "main_salinity"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes <- sig_genes[sig_genes$adj.P.Val < 0.05,]
+condition_x_physiology_sig <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/salinity_physiology_interaction.csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+condition_x_physiology_sig <-condition_x_physiology_sig[condition_x_physiology_sig$adj.P.Val < 0.05,]
+threeway_sig <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/threeway.csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway_sig <-threeway_sig[threeway_sig$adj.P.Val < 0.05,]
+drop_genes <- c(condition_x_physiology_sig$X,threeway_sig$X)
+sig_genes <-  sig_genes[!sig_genes$X %in% drop_genes,]
+
+gene_ids <- sig_genes$X[1:50]
+#gene_ids <- sig_genes$X
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+heat_cols <- c(gre,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(10), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(10))
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+
+```
+
+### Top 50 genes showing significant BW response (24 hour) using PGLS approach
+These genes show the same type of expression pattern as cftr and aqp3. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "transfer"
+comp <- "main_transfer"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+gene_ids <- sig_genes$X[1:50]
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+
+heat_cols <- c(gre,bla,yel)
+
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(20), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(20))
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+
+
+
+```

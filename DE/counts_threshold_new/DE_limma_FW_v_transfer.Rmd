@@ -193,7 +193,7 @@ physiology <- ExpDesign$physiology
 
 # Filtering and Normalization
 
-Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minium count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
+Genes with low expression across samples were dropped from the analysis using a conservative approach. The function `filterByExpr` was used on the raw counts matrix. For each `condition_physiology` group (regardless of species), each sample must have a minimum count of 10, and a group minimum total count of 100. This reduced the counts table to the following dimensions (genes x samples):
 
 ```{r filt, results="show",warning=FALSE}
 
@@ -206,9 +206,9 @@ lcom_unfilt<-log2(counts+1)
 plot(colSums(t(lcom_unfilt)))
 
 #lisa's minimun count filter
-#keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = 10, min.total.count = 100)
+keep<-filterByExpr(counts,design = design,group=condition_physiology,min.count = 10, min.total.count = 100)
 #joe's minimum count filter
-keep<-filterByExpr(counts,design = design,group=condition_physiology_clade,min.count = 10, min.total.count = 30)
+#keep<-filterByExpr(counts,design = design,group=condition_physiology_clade,min.count = 10, min.total.count = 30)
 
 counts.filt <- counts[keep,]
 dim(counts.filt)
@@ -559,10 +559,7 @@ dim(sig_main_salinity)
 
 ```
 
-
-
-## summary table
-```{r filt, results="show",warning=FALSE}
+```{r , eval = FALSE, results="hide",warning=FALSE}
 
 
 # make a summary table for Andrew:
@@ -738,12 +735,12 @@ salinity <- c("0ppt","15ppt","0ppt","15ppt","0ppt","15ppt","0ppt","15ppt","0ppt"
 sample_label_df <- data.frame(salinity,physiology,clade)
 rownames(sample_label_df) <- colnames(h)
 
-```
+
 
 
 # Heatmaps
 
-```{r filt, results="show",warning=FALSE}
+
 # adj.P.Val.Clade
 # adj.P.Val.Salinity
 # adj.P.Val.Physiology
