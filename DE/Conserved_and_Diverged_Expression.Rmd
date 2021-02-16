@@ -1,0 +1,1096 @@
+---
+title: "Conserved_and_Diverged_Expression"
+author: "Joe McGirr"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    collapsed: no
+    df_print: paged
+    number_sections: no
+    theme: paper
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_notebook:
+    toc: yes
+    toc_depth: 5
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(eulerr)
+library(ggpubr)
+library(gplots)
+library(pheatmap)
+library(kableExtra)
+library(UpSetR)
+#BiocManager::install("visFuns.R")
+
+# color-blind friendly 
+# Wong, B. Points of view: Color blindness. Nat Methods (2011).
+bla <- "#000000"
+blu <- "#0072b2"
+grb <- "#56b4e9"
+lir <- "#cc79a7"
+gre <- "#009e73"
+red <- "#d55e00"
+org <- "#e69f00"
+yel <- "#f0e442"
+gry<-  '#BBBBBB'
+
+```
+
+# Summary
+This notebook visualizes transcriptomic responses to osmotic stress across 14 Killifish species.
+
+##### Load functions and choose counts threshold
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+results_dir <- "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/"
+results_dir <- "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_lisa/"
+
+###### Fix original meta data file
+##################################
+# experiment = "BW" or "transfer"
+meta_out <- function(experiment){
+meta <- read.table(paste(results_dir,"ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+rownames(meta) <- meta$sample
+meta <- meta[,-5]
+meta$physiology <- gsub('M', 'euryhaline', meta$physiology)
+meta$physiology <- gsub('FW', 'stenohaline', meta$physiology)
+meta$clade <- gsub('Clade1', 'clade 1', meta$clade)
+meta$clade <- gsub('Clade2', 'clade 2', meta$clade)
+meta$clade <- gsub('Clade3', 'clade 3', meta$clade)
+names(meta)[names(meta) == "species"] <- "Species"
+# fix names to match tree
+meta$Species <- gsub("A_xenica","F_xenicus",meta$Species)
+meta$Species <- gsub("F_parvapinis","F_parvipinnis",meta$Species)
+meta$Species <- gsub("F_catanatus","F_catenatus",meta$Species)
+meta$Species <- gsub("F_olivaceous","F_olivaceus",meta$Species)
+return(meta)
+}
+
+###### single gene in panels
+############################
+# gene_id = ensemble id (ENSFHEP*)
+# experiment = "BW" or "transfer"
+# comp = effect
+all_samples_single_gene <- function(gene_id,comp,experiment){
+
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_id),]
+
+sig_genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes$gene_name <- tolower(sig_genes$external_gene_name)
+sig_genes <- sig_genes[sig_genes$X == gene_id,]
+gene_name <- sig_genes$external_gene_name[1]
+
+if (nrow(sig_genes) == 0){
+  print("gene name not found!")
+} else {
+
+sig_genes_counts <- t(norm_counts[row.names(norm_counts) %in% sig_genes[1,1],])
+counts <- merge(sig_genes_counts, meta, by = "row.names")
+counts$gene <- log2(counts[,2])
+counts[counts == -Inf]<-0
+counts[counts == Inf]<-0
+counts[is.na(counts)] <- 0
+
+counts$species <- factor(counts$Species,levels = c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis"),ordered = TRUE)
+
+return(counts)
+
+}
+}
+
+######### Heatmap with multiple genes
+#####################################
+# gene_id = vector of ensemble ids (ENSFHEP*)
+# experiment = "BW" or "transfer"
+# comp = effect
+heatmap_data_munge <- function(gene_ids,experiment){
+
+# norm_counts are counts per million normalized by library size from genes$samples$norm.factors
+# heatmap dataframe (hm) log2 normalizes and then scales by row (across all samples).
+
+meta <- read.table(paste(results_dir,"/ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_ids),]
+
+
+hm <- t(norm_counts)
+hm <- merge(meta, hm, by = "row.names")
+hm$species_condition <- paste(hm$Species, hm$condition, sep = ";")
+hm <- aggregate(hm[,6:(length(hm)-1)], list(hm$species_condition), mean)
+
+# set zero count threshold
+#hm <- hm[ rowSums(hm > 0) >= 10, ]
+#hm <- hm[,c(1:20)]
+
+fw <- hm[grep("0.2_ppt", hm$Group.1),]
+other <- hm[-grep("0.2_ppt", hm$Group.1),]
+species_names <- unlist(strsplit(fw$Group.1,";"))[!grepl('0.2_ppt',unlist(strsplit(fw$Group.1,";")))]
+fw$Group.1 <- NULL
+other$Group.1 <- NULL
+
+hm <- log2(other)-log2(fw)
+hm$Species <- species_names
+meta1 <- meta
+rownames(meta1) <- NULL
+hm <- merge(unique(meta1[,2:4]), hm, by = "Species")
+
+species_order <- c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis")
+
+hm_mat <- t(hm[,4:(length(hm))])
+colnames(hm_mat) <- hm$Species
+hm_mat <- hm_mat[,species_order]
+hm_mat[hm_mat == Inf] <- 0
+hm_mat[hm_mat == -Inf] <- 0
+hm_mat[is.na(hm_mat)] <- 0
+return(hm_mat)
+
+}
+heatmap_data_munge_strict_count_filt <- function(gene_ids,experiment){
+
+meta <- read.table(paste(results_dir,"ExpDesign_FW_v_",experiment,".txt",sep = ""),stringsAsFactors = FALSE, header = TRUE)
+meta <- meta_out(experiment)  
+
+norm_counts <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/normalized_counts.csv", sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
+rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
+norm_counts <- norm_counts[(row.names(norm_counts) %in% gene_ids),]
+
+hm <- t(norm_counts)
+hm <- merge(meta, hm, by = "row.names")
+hm$species_condition <- paste(hm$Species, hm$condition, sep = ";")
+hm <- aggregate(hm[,6:(length(hm)-1)], list(hm$species_condition), mean)
+
+# set zero count threshold
+hm <- hm[ rowSums(hm > 0) >= 10, ]
+hm <- hm[,c(1:20)]
+
+fw <- hm[grep("0.2_ppt", hm$Group.1),]
+other <- hm[-grep("0.2_ppt", hm$Group.1),]
+species_names <- unlist(strsplit(fw$Group.1,";"))[!grepl('0.2_ppt',unlist(strsplit(fw$Group.1,";")))]
+fw$Group.1 <- NULL
+other$Group.1 <- NULL
+
+hm <- log2(other)-log2(fw)
+hm$Species <- species_names
+meta1 <- meta
+rownames(meta1) <- NULL
+hm <- merge(unique(meta1[,2:4]), hm, by = "Species")
+
+species_order <- c("F_catenatus","F_rathbuni","F_diaphanus","F_grandis","F_heteroclitusMDPL","F_heteroclitusMDPP","L_goodei","F_parvipinnis","L_parva","F_notatus","F_olivaceus","F_xenicus","F_chrysotus","F_similis")
+
+hm_mat <- t(hm[,4:(length(hm))])
+colnames(hm_mat) <- hm$Species
+hm_mat <- hm_mat[,species_order]
+hm_mat[hm_mat == Inf] <- 0
+hm_mat[hm_mat == -Inf] <- 0
+hm_mat[is.na(hm_mat)] <- 0
+return(hm_mat)
+
+}
+
+
+# transfer comps
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+# BW comps
+comps <- c("clade_physiology_interaction","salinity_physiology_interaction","salinity_clade_interaction","threeway","main_clade","main_physiology","main_salinity")
+
+```
+
+
+### Conserved across all species: Genes show the same response to osmotic stress across all species, regardless of native physiology. 
+  
+  - Same fold-change expression response in all species.
+  - `gls(counts~treatment[FW or BW])`
+  - Significant for main effect of treatment but not significant for treatment x physiology and not significant for treatment x physiology x clade interactions.
+  
+### Diverged expression between euryhaline and steonhaline physiologies that is conserved across clades.  
+
+  - Opposite fold-change expression responses with native physiology.
+  - `gls(counts~treatment[FW or BW] x physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions.
+
+### Diverged expression between euryhaline and steonhaline physiologies that is diverged across clades. 
+
+  - Opposite fold-change expression responses with native physiology dependent on clade.
+  - `gls(counts~physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions. 
+
+
+# Visualize (2 week acclimation experiment)
+
+## Number of differentially expressed genes (adjusted p < 0.5) for each term in the ANOVA table with main effects and interactions
+
+```{r, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+
+comps <- c("main_salinity","main_physiology","main_clade","salinity_physiology_interaction","clade_physiology_interaction","salinity_clade_interaction","threeway")
+#comps <- c("main_transfer","main_physiology","main_clade","transfer_physiology_interaction","clade_physiology_interaction","transfer_clade_interaction","threeway")
+
+comp <- comps[1]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[2]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[3]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[4]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[5]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[6]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[7]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway <- genes[genes$adj.P.Val < 0.05,]$X
+
+n_genes <- c(length(treatment),length(physiology),length(clade),length(treatment_x_physiology),length(physiology_x_clade),length(treatment_x_clade),length(threeway))
+names <- c("treatment","physiology","clade","treatment_x_physiology","physiology_x_clade","treatment_x_clade","threeway")
+dt <- data.frame("model term" = names,"genes" = n_genes)
+
+
+dt %>%
+  kbl(caption = "Genes showing adjusted p < 0.05") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+listInput <- list(treatment=               treatment,
+                  physiology=              physiology,
+                  clade=                   clade,
+                  treatment_x_physiology=  treatment_x_physiology,
+                  physiology_x_clade=      physiology_x_clade,
+                  treatment_x_clade=       treatment_x_clade,
+                  threeway=                threeway)
+
+#png("C:/Users/jmcgirr/Documents/" , width = 12, height = 7, units = 'in', res = 600)
+upset(fromList(listInput), sets = rev(names(listInput)),order.by = "freq", 
+      point.size = 3.4, line.size = 1.2, 
+      mainbar.y.label = "genes intersecting", sets.x.label = "genes",keep.order = TRUE)
+#dev.off()
+
+```
+
+
+## Conserved across all species: Genes show the same response to osmotic stress across all species, regardless of native physiology. 
+  
+  - Same fold-change expression response in all species.
+  - `gls(counts~treatment[FW or BW])`
+  - Significant for main effect of treatment but not significant for treatment x physiology and not significant for treatment x physiology x clade interactions.
+  
+### Example genes: ctfr and aqp3
+ctfr is significantly upregulated in all species transferred to BW after 2 weeks. aqp3 is downregulated.
+
+```{r, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "main_salinity"
+gene_id <- c("ENSFHEP00000008393")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("cftr\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+gene_id <- c("ENSFHEP00000006725")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("aqp3\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+```
+
+
+### Heatmap: Genes showing significant BW response after 2 weeks
+  - These genes show the same type of expression pattern as cftr and aqp3. 
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "main_salinity"
+
+sig_genes <- treatment
+drop_genes <- c(treatment_x_physiology,threeway)
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+```
+  
+## Diverged expression between euryhaline and steonhaline physiologies that is conserved across clades.  
+
+  - Opposite fold-change expression responses with native physiology.
+  - `gls(counts~treatment[FW or BW] x physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions.
+  
+### Example genes: per3 and per1b
+per3 and per1b are significantly downregulated in all stenohaline species transferred to BW after 2 weeks. Both genes are upregulated in euryhaline species.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+gene_id <- c("ENSFHEP00000033747")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("per3\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+gene_id <- c("ENSFHEP00000023694")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("per1b\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+```
+
+### Heatmap: Genes showing significant treatment x physiology 
+  - These genes show the same type of expression pattern as per3 and per1b. 
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+
+sig_genes <- treatment_x_physiology
+drop_genes <- threeway
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros as white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+
+```
+
+
+## Diverged expression between euryhaline and steonhaline physiologies that is diverged across clades. 
+
+  - Opposite fold-change expression responses with native physiology dependent on clade.
+  - `gls(counts~physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions. 
+
+
+### Example genes: exoc7 and fbxo28
+exoc7 and fbxo28 show divergent expression patterns between physiology depending on clade
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "main_physiology"
+gene_id <- c("ENSFHEP00000009514")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("exoc7\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+gene_id <- c("ENSFHEP00000008976")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("fbxo28\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+```
+
+
+### Heatmap: Genes showing significant treatment x physiology 
+  - These genes show the same type of expression pattern as exoc7 and fbxo28. 
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+  
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "main_physiology"
+
+sig_genes <- physiology
+drop_genes <- c(treatment_x_physiology,threeway)
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros as white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+```
+
+# Visualize (24 hour acclimation experiment)
+
+## Number of differentially expressed genes (adjusted p < 0.5) for each term in the ANOVA table with main effects and interactions
+
+```{r, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "transfer"
+
+#comps <- c("main_salinity","main_physiology","main_clade","salinity_physiology_interaction","clade_physiology_interaction","salinity_clade_interaction","threeway")
+comps <- c("main_transfer","main_physiology","main_clade","transfer_physiology_interaction","clade_physiology_interaction","transfer_clade_interaction","threeway")
+
+comp <- comps[1]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[2]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[3]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[4]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[5]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[6]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[7]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway <- genes[genes$adj.P.Val < 0.05,]$X
+
+n_genes <- c(length(treatment),length(physiology),length(clade),length(treatment_x_physiology),length(physiology_x_clade),length(treatment_x_clade),length(threeway))
+names <- c("treatment","physiology","clade","treatment_x_physiology","physiology_x_clade","treatment_x_clade","threeway")
+dt <- data.frame("model term" = names,"genes" = n_genes)
+
+
+dt %>%
+  kbl(caption = "Genes showing adjusted p < 0.05") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+listInput <- list(treatment=               treatment,
+                  physiology=              physiology,
+                  clade=                   clade,
+                  treatment_x_physiology=  treatment_x_physiology,
+                  physiology_x_clade=      physiology_x_clade,
+                  treatment_x_clade=       treatment_x_clade,
+                  threeway=                threeway)
+
+#png("C:/Users/jmcgirr/Documents/" , width = 12, height = 7, units = 'in', res = 600)
+upset(fromList(listInput), sets = rev(names(listInput)),order.by = "freq", 
+      point.size = 3.4, line.size = 1.2, 
+      mainbar.y.label = "genes intersecting", sets.x.label = "genes",keep.order = TRUE)
+#dev.off()
+
+```
+
+
+## Conserved across all species: Genes show the same response to osmotic stress across all species, regardless of native physiology. 
+  
+  - Same fold-change expression response in all species.
+  - `gls(counts~treatment[FW or BW])`
+  - Significant for main effect of treatment but not significant for treatment x physiology and not significant for treatment x physiology x clade interactions.
+  
+### Heatmap: Genes showing significant BW response after 24 hours
+
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "transfer"
+comp <- "main_transfer"
+
+sig_genes <- treatment
+drop_genes <- c(treatment_x_physiology,threeway)
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+```
+  
+## Diverged expression between euryhaline and steonhaline physiologies that is conserved across clades.  
+
+  - Opposite fold-change expression responses with native physiology.
+  - `gls(counts~treatment[FW or BW] x physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions.
+  
+### Heatmap: Genes showing significant treatment x physiology 
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "transfer"
+comp <- "transfer_physiology_interaction"
+
+sig_genes <- treatment_x_physiology
+drop_genes <- threeway
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros as white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+
+```
+
+
+## Diverged expression between euryhaline and steonhaline physiologies that is diverged across clades. 
+
+  - Opposite fold-change expression responses with native physiology dependent on clade.
+  - `gls(counts~physiology[euryhaline or stenohaline])`
+  - Significant for treatment x physiology interaction but not for treatment x physiology x clade interactions. 
+
+### Heatmap: Genes showing significant treatment x physiology 
+
+  - log2(mean.species.BW) - log2(mean.species.FW)
+  - Genes with large fold changes (> 2 or < -2) have been filtered out.
+  
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "transfer"
+comp <- "main_physiology"
+
+sig_genes <- physiology
+drop_genes <- c(treatment_x_physiology,threeway)
+sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
+
+gene_ids <- sig_genes[1:50]
+gene_ids <- sig_genes
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros as white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F)
+
+```
+
+# Overlap between 2 week acclimation and 24 hour acclimation
+
+```{r, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+
+comps <- c("main_salinity","main_physiology","main_clade","salinity_physiology_interaction","clade_physiology_interaction","salinity_clade_interaction","threeway")
+#comps <- c("main_transfer","main_physiology","main_clade","transfer_physiology_interaction","clade_physiology_interaction","transfer_clade_interaction","threeway")
+
+comp <- comps[1]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[2]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[3]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[4]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[5]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[6]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[7]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway <- genes[genes$adj.P.Val < 0.05,]$X
+
+sig_genes <- treatment
+drop_genes <- c(treatment_x_physiology,threeway)
+treatment_acclimation <-  sig_genes[!sig_genes %in% drop_genes]
+sig_genes <- treatment_x_physiology
+drop_genes <- threeway
+treatment_x_physiology_acclimation <-  sig_genes[!sig_genes %in% drop_genes]
+sig_genes <- physiology
+drop_genes <- c(treatment_x_physiology,threeway)
+physiology_acclimation <-  sig_genes[!sig_genes %in% drop_genes]
+
+n_genes <- c(length(treatment_acclimation),length(treatment_x_physiology_acclimation),length(physiology_acclimation))
+names <- c("conserved across all species","diverged between physiologies","diverged between clades")
+dt <- data.frame("expression response" = names,"genes" = n_genes)
+
+dt %>%
+  kbl(caption = "conserved and diverged expression: 2 week acclimation") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+
+
+experiment <- "transfer"
+
+#comps <- c("main_salinity","main_physiology","main_clade","salinity_physiology_interaction","clade_physiology_interaction","salinity_clade_interaction","threeway")
+comps <- c("main_transfer","main_physiology","main_clade","transfer_physiology_interaction","clade_physiology_interaction","transfer_clade_interaction","threeway")
+
+comp <- comps[1]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[2]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[3]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[4]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_physiology <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[5]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+physiology_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[6]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+treatment_x_clade <- genes[genes$adj.P.Val < 0.05,]$X
+comp <- comps[7]
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway <- genes[genes$adj.P.Val < 0.05,]$X
+
+
+sig_genes <- treatment
+drop_genes <- c(treatment_x_physiology,threeway)
+treatment_transfer <-  sig_genes[!sig_genes %in% drop_genes]
+sig_genes <- treatment_x_physiology
+drop_genes <- threeway
+treatment_x_physiology_transfer <-  sig_genes[!sig_genes %in% drop_genes]
+sig_genes <- physiology
+drop_genes <- c(treatment_x_physiology,threeway)
+physiology_transfer <-  sig_genes[!sig_genes %in% drop_genes]
+
+n_genes <- c(length(treatment_transfer),length(treatment_x_physiology_transfer),length(physiology_transfer))
+names <- c("conserved across all species","diverged between physiologies","diverged between clades")
+dt <- data.frame("expression response" = names,"genes" = n_genes)
+
+dt %>%
+  kbl(caption = "conserved and diverged expression: 24 hour acclimation") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+n_genes <- c(length(treatment_acclimation),length(treatment_x_physiology_acclimation),length(physiology_acclimation))
+n_genes <- c(length(treatment_transfer),length(treatment_x_physiology_transfer),length(physiology_transfer))
+
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(treatment_acclimation=treatment_acclimation,
+                  treatment_transfer=treatment_transfer)),
+     quantities = TRUE, labels = c("2 week","24 hour"), main ="conserved across all species" )
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(treatment_x_physiology_acclimation=treatment_x_physiology_acclimation,
+                  treatment_x_physiology_transfer=treatment_x_physiology_transfer)),
+     quantities = TRUE, labels = c("2 week","24 hour"), main ="diverged between physiologies" )
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(physiology_acclimation=physiology_acclimation,
+                physiology_transfer=physiology_transfer)),
+     quantities = TRUE, labels = c("2 week","24 hour"), main ="diverged between clades" )
+#dev.off()
+
+```
+
+# PGLS
+
+## Comparing limma vs. PGLS
+
+## Top 500 genes showing significant treatment x physiology using PGLS approach
+
+  - These genes SHOULD show the same type of expression pattern as per3 and per1b.
+  - `pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
+    data = slopes, method = "ML")`
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+
+pgls_sig_genes <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/salinity_physiology_interaction.txt",header = TRUE,stringsAsFactors = FALSE)
+
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p < 0.001,]
+
+pgls_gene_ids_acclimation <- pgls_sig_genes$gene[1:500]
+pgls_gene_ids_acclimation_all <- pgls_sig_genes$gene
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(pgls_gene_ids_acclimation,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F,
+         main = "2 week experiment")
+
+
+experiment <- "transfer"
+comp <- "transfer_physiology_interaction"
+
+pgls_sig_genes <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/transfer_physiology_interaction.txt",header = TRUE,stringsAsFactors = FALSE)
+
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p < 0.001,]
+
+pgls_gene_ids_transfer <- pgls_sig_genes$gene[1:500]
+pgls_gene_ids_transfer_all  <- pgls_sig_genes$gene
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+hm <- heatmap_data_munge(pgls_gene_ids_transfer,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=F,
+         main = "24 hour experiment")
+
+
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(treatment_acclimation_limma=treatment_x_physiology_acclimation,
+                treatment_acclimation_PGLS=pgls_gene_ids_acclimation_all)),
+     quantities = TRUE, labels = c("limma","PGLS"), main ="significant treatment x physiology (2 weeks)" )
+#dev.off()
+#png("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/overlap_main_effect_condition.png", height = 2.35, width = 2.35, units = 'in', res = 600)
+plot(euler(list(treatment_acclimation_limma=treatment_x_physiology_transfer,
+                treatment_acclimation_PGLS=pgls_gene_ids_transfer_all)),
+     quantities = TRUE, labels = c("limma","PGLS"), main ="significant treatment x physiology (24 hours)" )
+#dev.off()
+
+
+listInput <- list(limma_2wk=treatment_x_physiology_acclimation,
+                  PGLS_2wk = pgls_gene_ids_acclimation_all,
+                  limma_24hr=treatment_x_physiology_transfer,
+                  PGLS_24hr = pgls_gene_ids_transfer_all)
+
+#png("C:/Users/jmcgirr/Documents/" , width = 12, height = 7, units = 'in', res = 600)
+upset(fromList(listInput), sets = rev(names(listInput)),order.by = "freq", 
+      point.size = 3.4, line.size = 1.2, 
+      mainbar.y.label = "genes intersecting", sets.x.label = "genes",keep.order = TRUE)
+#dev.off()
+
+```

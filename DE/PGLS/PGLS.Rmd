@@ -1153,6 +1153,12 @@ return(hm_mat)
 
 }
 
+
+# transfer comps
+comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
+# BW comps
+comps <- c("clade_physiology_interaction","salinity_physiology_interaction","salinity_clade_interaction","threeway","main_clade","main_physiology","main_salinity")
+
 ```
 
 ## significant main effect: condition
@@ -1177,7 +1183,7 @@ p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
     xlab("\ncondition")+
     scale_fill_manual(values=c(blu,red))+
     scale_color_manual(values = c(rep("black",28)))+
-    ggtitle(paste(gene_name,"\n", sig_genes[1,1], sep = ""))+
+    ggtitle(paste("cftr\n", gene_id, sep = ""))+
     facet_wrap(~clade + species, ncol = 14)+
     stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
     stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
@@ -1222,12 +1228,9 @@ These genes show the same type of expression pattern as cftr and aqp3.
 
 Significance determined from F tests from ANOVA table: significant (adjusted p-value <0.05) for main effect of salinity but not significant for salinity x physiology and not significant for salinity x physiology x clade interactions.
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+Genes with large fold changes (> 2 or < -2) have been filtered out.
 
-# transfer comps
-comps <- c("main_transfer","main_clade","threeway","transfer_clade_interaction", "transfer_physiology_interaction","clade_physiology_interaction","main_physiology")
-# BW comps
-comps <- c("clade_physiology_interaction","salinity_physiology_interaction","salinity_clade_interaction","threeway","main_clade","main_physiology","main_salinity")
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
 experiment <- "BW"
 comp <- "main_salinity"
@@ -1257,8 +1260,15 @@ meta$Species <- NULL
 hm <- heatmap_data_munge(gene_ids,experiment)
 #hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
 
-heat_cols <- c(gre,bla,yel)
-my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(10), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(10))
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
 annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
 pheatmap(hm, cluster_rows = TRUE,
          gaps_col = c(6,9),
@@ -1272,16 +1282,90 @@ pheatmap(hm, cluster_rows = TRUE,
 
 ```
 
-### Top 50 genes showing significant BW response (24 hour) using PGLS approach
-These genes show the same type of expression pattern as cftr and aqp3. 
+
+## significant interaction: condition x physiology
+
+### Example genes: per3 and per1b
+per3 and per1b are significantly downregulated in all stenohaline species transferred to BW after 24 hours and after 2 weeks. Both genes are upregulated in euryhaline species.
+
+These two plots show expression responses after 2 weeks in BW.
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
-experiment <- "transfer"
-comp <- "main_transfer"
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+gene_id <- c("ENSFHEP00000033747")
 
-sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("per3\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+gene_id <- c("ENSFHEP00000023694")
+
+counts <- all_samples_single_gene(gene_id,comp,experiment)
+
+p1<-ggplot(counts, aes(x=condition, y=gene, col = species, fill = physiology)) +
+  geom_point()+
+    theme_minimal()+
+    ylab("log2 normalized counts\n")+
+    xlab("\ncondition")+
+    scale_fill_manual(values=c(blu,red))+
+    scale_color_manual(values = c(rep("black",28)))+
+    ggtitle(paste("per1b\n", gene_id, sep = ""))+
+    facet_wrap(~clade + species, ncol = 14)+
+    stat_summary(geom = "point",fun = "mean",size = 3,shape = 22,aes(fill =physiology))+
+    stat_summary(geom = "line",fun = "mean",col = "black",aes(group = 1))+
+    theme(axis.text.x = element_text(angle=90, hjust=1))+
+    theme(strip.text.x = element_text(size = 6))+
+    theme(legend.position = "none")
+
+#png(paste("C:/Users/jmcgirr/Documents/Whitehead_Lab/fun/figs/genes/",gene_name, "_",comp,"_exp_transfer.png",sep = ""), height = 4.5, width = 12, units = 'in', res = 600)
+print(p1)
+#dev.off()
+
+
+```
+
+
+### Top 50 genes showing significant condition x physiology (2 weeks) using limma approach
+These genes show the same type of expression pattern as cftr and aqp3. 
+
+Significance determined from F tests from ANOVA table: significant (adjusted p-value <0.05) for main effect of salinity but not significant for salinity x physiology and not significant for salinity x physiology x clade interactions.
+
+Genes with large fold changes (> 2 or < -2) have been filtered out.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+
+sig_genes <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_lisa/DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+sig_genes <- sig_genes[sig_genes$adj.P.Val < 0.05,]
+threeway_sig <- read.csv(paste("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_lisa/DE_limma_FW_v_",experiment,"/DE_results/threeway.csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+threeway_sig <-threeway_sig[threeway_sig$adj.P.Val < 0.05,]
+drop_genes <- threeway_sig$X
+sig_genes <-  sig_genes[!sig_genes$X %in% drop_genes,]
+
 gene_ids <- sig_genes$X[1:50]
+#gene_ids <- sig_genes$X
 
 meta <- meta_out(experiment)
 meta$condition <- NULL
@@ -1292,13 +1376,66 @@ row.names(meta) <- meta$Species
 meta$Species <- NULL
 
 hm <- heatmap_data_munge(gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
 
-heat_cols <- c(gre,bla,yel)
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
 
-my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(20), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(20))
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+# color zeros as white
+#my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8),"white", colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+
 
 annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
+pheatmap(hm, cluster_rows = TRUE,
+         gaps_col = c(6,9),
+         border_color=FALSE,
+         annotation_col=meta,
+         annotation_colors = annotation_colors,
+         color = my.colors,
+         cluster_cols = F,
+         show_rownames=T)
 
+
+```
+
+### Top 50 genes showing significant condition x physiology (2 weeks) using PGLS approach
+These genes SHOULD show the same type of expression pattern as cftr and aqp3. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
+
+experiment <- "BW"
+comp <- "salinity_physiology_interaction"
+
+pgls_sig_genes <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/transfer_physiology_interaction.txt",header = TRUE,stringsAsFactors = FALSE)
+
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p < 0.05,]
+
+pgls_gene_ids <- pgls_sig_genes$gene[1:50]
+#gene_ids <- sig_genes$X
+
+meta <- meta_out(experiment)
+meta$condition <- NULL
+meta$clade <- NULL
+row.names(meta) <- NULL
+meta <- unique(meta)
+row.names(meta) <- meta$Species
+meta$Species <- NULL
+
+
+
+hm <- heatmap_data_munge(pgls_gene_ids,experiment)
+#hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
+
+# Set a fold-change threshold to exclude outliers that skew shading
+hm <- hm[!rowSums(hm >2),]
+hm <- hm[!rowSums(hm < -2),]
+
+heat_cols <- c(grb,bla,yel)
+my.colors <- c(colorRampPalette(colors = c(heat_cols[1], heat_cols[2]))(8), colorRampPalette(colors = c(heat_cols[2], heat_cols[3]))(8))
+annotation_colors <-  list(physiology = c("euryhaline"=blu, "stenohaline"=red))
 pheatmap(hm, cluster_rows = TRUE,
          gaps_col = c(6,9),
          border_color=FALSE,
@@ -1307,6 +1444,10 @@ pheatmap(hm, cluster_rows = TRUE,
          color = my.colors,
          cluster_cols = F,
          show_rownames=F)
+
+length(intersect(pgls_gene_ids,gene_ids))
+
+```
 
 
 
