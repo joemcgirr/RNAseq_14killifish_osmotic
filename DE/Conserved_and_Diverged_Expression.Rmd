@@ -584,7 +584,7 @@ print(p1)
 ```
 
 
-### Heatmap: Genes showing significant treatment x physiology 
+### Heatmap: Genes showing significant physiology 
   - These genes show the same type of expression pattern as exoc7 and fbxo28. 
   - log2(mean.species.BW) - log2(mean.species.FW)
   - Genes with large fold changes (> 2 or < -2) have been filtered out.
@@ -985,20 +985,26 @@ plot(euler(list(physiology_acclimation=physiology_acclimation,
 
 ## Comparing limma vs. PGLS
 
-## Top 500 genes showing significant treatment x physiology using PGLS approach
+## Genes showing significant treatment x physiology using PGLS approach
 
   - These genes SHOULD show the same type of expression pattern as per3 and per1b.
   - `pglsModel <- gls(slope ~ physiology, correlation = corBrownian(phy = tree),
     data = slopes, method = "ML")`
+  - Benjamini-Hochberg adjusted p < 0.1
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
 experiment <- "BW"
 comp <- "salinity_physiology_interaction"
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
 
 pgls_sig_genes <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/salinity_physiology_interaction.txt",header = TRUE,stringsAsFactors = FALSE)
-
-pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p < 0.001,]
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$gene %in% genes$X,]
+pgls_sig_genes$p_adj <- p.adjust(pgls_sig_genes$p , method = "BH", n = length(pgls_sig_genes$p))
+pgls_sig_genes <- pgls_sig_genes[order(pgls_sig_genes$p_adj),]
+#head(pgls_sig_genes)
+##nrow(pgls_sig_genes[pgls_sig_genes$p_adj <= 0.1,])
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p_adj <= 0.1,]
 
 pgls_gene_ids_acclimation <- pgls_sig_genes$gene[1:500]
 pgls_gene_ids_acclimation_all <- pgls_sig_genes$gene
@@ -1011,7 +1017,7 @@ meta <- unique(meta)
 row.names(meta) <- meta$Species
 meta$Species <- NULL
 
-hm <- heatmap_data_munge(pgls_gene_ids_acclimation,experiment)
+hm <- heatmap_data_munge(pgls_gene_ids_acclimation_all,experiment)
 
 # Set a fold-change threshold to exclude outliers that skew shading
 hm <- hm[!rowSums(hm >2),]
@@ -1034,10 +1040,13 @@ pheatmap(hm, cluster_rows = TRUE,
 experiment <- "transfer"
 comp <- "transfer_physiology_interaction"
 
+genes <- read.csv(paste(results_dir,"DE_limma_FW_v_",experiment,"/DE_results/",comp,".csv",sep = ""),stringsAsFactors = FALSE, header = TRUE,row.names=NULL)
+
 pgls_sig_genes <- read.table("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/PGLS/results/transfer_physiology_interaction.txt",header = TRUE,stringsAsFactors = FALSE)
-
-pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p < 0.001,]
-
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$gene %in% genes$X,]
+pgls_sig_genes$p_adj <- p.adjust(pgls_sig_genes$p , method = "BH", n = length(pgls_sig_genes$p))
+pgls_sig_genes <- pgls_sig_genes[order(pgls_sig_genes$p_adj),]
+pgls_sig_genes <- pgls_sig_genes[pgls_sig_genes$p_adj <= 0.1,]
 pgls_gene_ids_transfer <- pgls_sig_genes$gene[1:500]
 pgls_gene_ids_transfer_all  <- pgls_sig_genes$gene
 
@@ -1049,7 +1058,7 @@ meta <- unique(meta)
 row.names(meta) <- meta$Species
 meta$Species <- NULL
 
-hm <- heatmap_data_munge(pgls_gene_ids_transfer,experiment)
+hm <- heatmap_data_munge(pgls_gene_ids_transfer_all,experiment)
 #hm <- heatmap_data_munge_strict_count_filt(gene_ids,experiment)
 
 # Set a fold-change threshold to exclude outliers that skew shading
