@@ -216,7 +216,7 @@ comps <- c("clade_physiology_interaction","salinity_physiology_interaction","sal
 
 ### Conserved expression response to osmotic stress across all species.
 
-  -Genes show the same response to osmotic stress across all species, regardless of native physiology.
+  - Genes show the same response to osmotic stress across all species, regardless of native physiology.
   - Same fold-change expression response to osmotic stress.
   - Significant for main effect of treatment but not significant for (treatment x physiology) and not significant for (treatment x physiology x clade interactions).
   - `gls(counts~treatment[FW or BW])`
@@ -372,6 +372,7 @@ experiment <- "BW"
 comp <- "main_salinity"
 
 sig_genes <- treatment
+drop_genes <- c(treatment_x_physiology,threeway, treatment_x_clade)
 drop_genes <- c(treatment_x_physiology,threeway)
 sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
 
@@ -425,7 +426,7 @@ pheatmap(hm, cluster_rows = TRUE,
  
 ## Diverged expression between physiologies regardless of osmotic environment. 
 
-  - Diverged expression between euryhaline and stenohaline. Expression levels in each species do not change between treatments.  
+  - Diverged expression between euryhaline and stenohaline. Expression levels in each species do not change between treatments.
   - Significant for main effect of physiology but not significant for (treatment x physiology) or (treatment x physiology x clade) interactions.
   - Should this also exclude (physiology x clade) interactions?
   - `gls(counts~physiology[euryhaline or stenohaline])`
@@ -496,6 +497,7 @@ experiment <- "BW"
 comp <- "main_physiology"
 
 sig_genes <- physiology
+drop_genes <- c(threeway,treatment_x_physiology, physiology_x_clade)
 drop_genes <- c(threeway,treatment_x_physiology)
 sig_genes <-  sig_genes[!sig_genes %in% drop_genes]
 
