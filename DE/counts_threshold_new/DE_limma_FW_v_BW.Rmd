@@ -30,7 +30,7 @@ https://www.bioconductor.org/packages/devel/workflows/vignettes/RNAseq123/inst/d
 ```{r LoadPackages, results='hide', include=FALSE, warning=FALSE}
 
 # Install function for packages    
-packages<-function(x){
+packages<-function(x){ 
   x<-as.character(match.call()[[2]])
   if (!require(x,character.only=TRUE)){
     install.packages(pkgs=x,repos="http://cran.r-project.org")

@@ -234,7 +234,7 @@ tmp <- dplyr::select(tmp, Ensembl, everything())
 
 norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/DE_limma_FW_v_BW/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
 
-dim(norm_counts)
+dim(norm_counts) 
 # fix rownames to chop .1 off
 rownames(norm_counts) <- unlist(strsplit(rownames(norm_counts),split="[.]1"))
 

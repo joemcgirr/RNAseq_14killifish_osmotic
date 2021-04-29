@@ -50,7 +50,7 @@ gry<-  '#BBBBBB'
 This notebook visualizes transcriptomic responses to osmotic stress across 14 Killifish species.
 
 ##### Load functions and choose counts threshold
-
+ 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 10, fig.height= 7}
 
 results_dir <- "C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/"

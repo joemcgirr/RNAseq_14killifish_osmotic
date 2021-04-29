@@ -259,7 +259,7 @@ genes = calcNormFactors(genes)
 # write counts per million normalized counts
 tmp <- as.data.frame(cpm(genes))
 tmp$Ensembl <- rownames(tmp)
-tmp <- dplyr::select(tmp, Ensembl, everything())
+tmp <- dplyr::select(tmp, Ensembl, everything()) 
 #write.csv(tmp, file = file.path("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/normalized_counts.csv"), quote = F, row.names = F)
 
 norm_counts <- read.csv("C:/Users/jmcgirr/Documents/GitHub/RNAseq_17killifish_osmotic/DE/counts_threshold_new/DE_limma_FW_v_transfer/normalized_counts.csv",stringsAsFactors = FALSE, header = TRUE,row.names = "Ensembl")
